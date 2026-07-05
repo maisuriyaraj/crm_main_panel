@@ -2,10 +2,12 @@
 
 import { motion } from "framer-motion";
 import { Activity, ArrowRight, BarChart3, Building2, Check, ChevronDown, CircleDollarSign, Clock3, Cloud, GraduationCap, HeartPulse, LineChart, Mail, Megaphone, Menu, MousePointer2, Play, Quote, Rocket, ShieldCheck, Sparkles, Store, Target, TrendingUp, Users, Workflow, X, Zap } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { pageRoutes } from "@/lib/constants";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { reqToGetPricingPlans } from "@/lib/store/slices/pricingPlansSlice";
 
 const fade = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-80px" }, transition: { duration: 0.6 } };
 const features = [
@@ -194,8 +196,29 @@ function Dashboard() {
 }
 
 export default function Home() {
+  
+  const dispatch = useAppDispatch();
+  const { pricingPlans } = useAppSelector((state) => state.pricing);
+
+  const fetchPricingPlans = () => {
+    // Dispatch the action to fetch pricing plans
+    dispatch(reqToGetPricingPlans({
+      data: {},
+      onSuccess: (data: any) => { },
+      onFailure: (error: any) => { },
+    }));
+  }
+
+  useEffect(() => {
+    fetchPricingPlans();
+  }, []);
   const [menu, setMenu] = useState(false); const [faq, setFaq] = useState(0); const [screen, setScreen] = useState(0);
   const router = useRouter();
+
+  const goToBookTrial = () => {
+    router.push(pageRoutes.signup)
+  }
+
   return <div id="top" className="min-h-screen bg-background text-foreground">
     <header className="fixed inset-x-0 top-0 z-50 border-b bg-glass backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5">
@@ -203,12 +226,14 @@ export default function Home() {
         <nav className="hidden items-center gap-7 text-sm text-muted-foreground lg:flex">
           {navLinks.map(x => <a key={x} href={`#${x.toLowerCase().replaceAll(" ", "-")}`} className="transition hover:text-foreground">{x}</a>)}
         </nav>
-        <div className="hidden gap-2 lg:flex"><Button variant="ghost" onClick={() => router.push(pageRoutes.signin)}>Sign in</Button><Button variant="hero" onClick={() => router.push(pageRoutes.signup)}>Start free trial <ArrowRight /></Button></div>
+        <div className="hidden gap-2 lg:flex"><Button variant="ghost" onClick={() => router.push(pageRoutes.signin)}>Sign in</Button><Button variant="hero" onClick={goToBookTrial}>Start free trial <ArrowRight /></Button></div>
         <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMenu(!menu)} aria-label="Toggle menu">{menu ? <X /> : <Menu />}</Button>
       </div>
       {menu && <nav className="border-t bg-background p-5 lg:hidden">
         {navLinks.map(x => <a onClick={() => setMenu(false)} key={x} href={`#${x.toLowerCase().replaceAll(" ", "-")}`} className="block py-3 text-sm">{x}</a>)}
-        <Button variant="hero" size="lg" className="mt-3 w-full">Start free trial</Button>
+        <Button variant="hero" size="lg" className="mt-3 w-full" onClick={goToBookTrial}>
+          Start free trial
+        </Button>
       </nav>}
     </header>
 
@@ -220,7 +245,7 @@ export default function Home() {
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border bg-surface px-3 py-1.5 text-xs font-semibold text-primary shadow-sm"><Sparkles className="size-3.5" /> The operating system for business growth <ArrowRight className="size-3" /></div>
           <h1 className="text-gradient text-balance text-5xl font-semibold leading-[1.08] tracking-[-.045em] sm:text-7xl">Run Your Entire Business From One Platform</h1>
           <p className="mx-auto mt-6 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">OrbitOps combines CRM, Sales, Marketing, Billing, Automation, Analytics, and Advertising into a unified growth engine.</p>
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row"><Button variant="hero" size="lg">Start Free Trial <ArrowRight /></Button><Button variant="glass" size="lg"><Play /> Book a Demo</Button></div>
+          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row"><Button variant="hero" size="lg" onClick={goToBookTrial}>Start Free Trial <ArrowRight /></Button><Button variant="glass" size="lg" onClick={goToBookTrial}><Play /> Book a Demo</Button></div>
           <p className="mt-4 text-xs text-muted-foreground">14-day free trial · No credit card required · Setup in minutes</p>
         </div>
         <Dashboard />
@@ -259,7 +284,9 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <Button variant="hero" size="lg" className="mt-9">Explore the platform <ArrowRight /></Button>
+            <Button variant="hero" size="lg" className="mt-9" onClick={goToBookTrial}>
+              Explore the platform <ArrowRight />
+            </Button>
           </motion.div>
           <motion.div {...fade} className="relative rounded-2xl border bg-card p-5 panel-shadow">
             <div className="mb-5 flex items-center justify-between">
@@ -393,25 +420,27 @@ export default function Home() {
       <section id="pricing" className="bg-secondary/50 px-5 py-24">
         <SectionHeading eyebrow="Simple pricing" title="A plan for every stage of growth" copy="Start free, then scale on your terms. All plans include secure cloud hosting and support." />
         <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {plans.map((p, i) => (
-            <motion.article {...fade} transition={{ delay: i * .06 }} key={p.name} className={`relative rounded-2xl border p-6 ${p.popular ? "border-primary bg-card shadow-[var(--shadow-primary)]" : "bg-card"}`}>
-              {p.popular && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">Most popular</span>}
-              <h3 className="text-lg font-semibold">{p.name}</h3>
-              <p className="mt-2 min-h-10 text-xs text-muted-foreground">{p.desc}</p>
-              <div className="my-6"><strong className="text-3xl">{p.price}</strong>{p.price !== "Custom" && <span className="text-xs text-muted-foreground"> / month</span>}</div>
-              <Button variant={p.popular ? "hero" : "outline"} className="w-full">{p.price === "Custom" ? "Contact sales" : "Start free trial"}</Button>
+          {pricingPlans.map((p, i) => (
+            <motion.article {...fade} transition={{ delay: i * .06 }} key={p.plan_name} className={`relative rounded-2xl border p-6 ${p.recommended ? "border-primary bg-card shadow-[var(--shadow-primary)]" : "bg-card"}`}>
+              {p.recommended && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">Most popular</span>}
+              <h3 className="text-lg font-semibold">{p.plan_name}</h3>
+              <p className="mt-2 min-h-10 text-xs text-muted-foreground">{p.plan_description}</p>
+              <div className="my-6"><strong className="text-3xl">{p.price_duration !== "custom" ? p.price : "Custom"}</strong>{p.price_duration !== "custom" && <span className="text-xs text-muted-foreground"> / month</span>}</div>
+              <Button variant={p.recommended ? "hero" : "outline"} className="w-full" onClick={goToBookTrial}>
+                {p.price_duration === "custom" ? "Contact sales" : "Start free trial"}
+              </Button>
               <ul className="mt-6 space-y-3">
-                {p.features.map(x => <li key={x} className="flex gap-2 text-xs"><Check className="size-4 text-emerald-600" />{x}</li>)}
+                {p.plan_features.map(x => <li key={x} className="flex gap-2 text-xs"><Check className="size-4 text-emerald-600" />{x}</li>)}
               </ul>
             </motion.article>
           ))}
         </div>
-        <div className="mx-auto mt-10 max-w-5xl overflow-x-auto rounded-2xl border bg-card">
+        {/* <div className="mx-auto mt-10 max-w-5xl overflow-x-auto rounded-2xl border bg-card">
           <table className="w-full min-w-[680px] text-left text-sm">
             <thead>
               <tr className="border-b bg-secondary/50">
                 <th className="p-4">Compare features</th>
-                {plans.map(p => <th className="p-4" key={p.name}>{p.name}</th>)}
+                {plans.map(p => <th className="p-4" key={p.plan_name}>{p.plan_name}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -422,7 +451,7 @@ export default function Home() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div> */}
       </section>
 
       <section id="faq" className="px-5 py-24">
@@ -446,8 +475,10 @@ export default function Home() {
           <h2 className="relative text-balance text-3xl font-semibold sm:text-5xl">Ready to Scale Your Business with OrbitOps?</h2>
           <p className="relative mx-auto mt-4 max-w-xl text-sm opacity-80 sm:text-base">Bring your teams, tools, and customer journey together. See the difference in your first week.</p>
           <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Button variant="inverse" size="lg">Start Free Trial <ArrowRight /></Button>
-            <Button variant="glass" size="lg" className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20"><Play /> Schedule Demo</Button>
+            <Button variant="inverse" size="lg" onClick={goToBookTrial} >Start Free Trial <ArrowRight /></Button>
+            <Button variant="glass" size="lg" className="border-primary-foreground/30 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20" onClick={goToBookTrial}>
+              <Play /> Schedule Demo
+            </Button>
           </div>
         </motion.div>
       </section>

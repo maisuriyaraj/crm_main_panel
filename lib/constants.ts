@@ -6,3 +6,7 @@ export const pageRoutes = {
     signup: "/auth/signup",
     forgotPassword: "/auth/forgot-password",
 }
+
+export const apiRoutes = {
+    getPricingPlans: "/admin/plan-lists",
+}
