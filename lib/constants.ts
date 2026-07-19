@@ -9,4 +9,5 @@ export const pageRoutes = {
 
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",
+    bookDemo:"/user/bookings"
 }

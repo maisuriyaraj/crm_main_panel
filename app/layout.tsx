@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from 'sonner';
+
 import "./globals.css";
 import StoreProvider from "@/lib/store/StoreProvider";
 
@@ -31,6 +33,7 @@ export default function RootLayout({
       <StoreProvider>
 
         <body className="min-h-full flex flex-col">{children}</body>
+        <Toaster richColors position="top-right" />
       </StoreProvider>
     </html>
   );
