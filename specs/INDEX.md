@@ -13,4 +13,4 @@ Group | File Path | Description | Status
 
 ## Specs
 
-(empty, Claude will add entries here as specs are created)
+auth | specs/auth/auth-flow.md | Shared login, silent token refresh, forced password reset, role-gated app shell, and Org Admin team management. | Implemented

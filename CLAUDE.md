@@ -51,6 +51,7 @@ This file is read in full every session, every line here is a fixed cost paid on
 - This repo is pinned to `next@16.2.6`, a version ahead of general training data. Local docs are vendored at `node_modules/next/dist/docs/` — see `AGENTS.md` (imported at the top of this file) for when to consult them.
 - `lib/axios/index.ts` hardcodes its `baseURL`; `.env`'s `API_URL` is currently unused. See `.claude/rules/api-conventions.md`.
 - `app/layout.tsx` loads Geist/Geist Mono fonts, but `app/globals.css` actually applies Manrope/Sora as the live font tokens — Geist currently has no visible effect. See `.claude/rules/theming.md`.
+- In `next@16.2.6`, `middleware.ts` is deprecated and renamed to `proxy.ts` (function name `proxy`, same capability). This repo's project-root route-gating file is `proxy.ts`, not `middleware.ts` — see `specs/auth/auth-flow.md`.
 
 ## Rules
 

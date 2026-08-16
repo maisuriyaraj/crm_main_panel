@@ -5,9 +5,19 @@ export const pageRoutes = {
     signin: "/auth/signin",
     signup: "/auth/signup",
     forgotPassword: "/auth/forgot-password",
+    resetPassword: "/auth/reset-password",
+    dashboard: "/dashboard",
+    settingsTeam: "/settings/team",
 }
 
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",
-    bookDemo:"/user/bookings"
+    bookDemo:"/user/bookings",
+    login: "/api/auth/login",
+    refreshToken: "/api/auth/refresh",
+    logout: "/api/auth/logout",
+    logoutAll: "/api/auth/logout-all",
+    me: "/api/auth/me",
+    resetPassword: "/api/auth/reset-password",
+    appUsers: "/api/app/users",
 }

@@ -6,6 +6,7 @@
 - Always compose class names with `cn()` from `lib/utils.ts` (`clsx` + `tailwind-merge`). Never string-concatenate className props.
 - For polymorphic components, follow the existing `asChild` + Radix `Slot` pattern used in `button.tsx`.
 - Design tokens and color/spacing rules for these components: see `.claude/rules/theming.md`.
+- `components/ui/data-table.tsx` is a generic sortable/searchable/paginated table (client-side, no `@tanstack/react-table` dependency), composed from `table.tsx` + `pagination.tsx` + `input.tsx`. Reuse it for any new list screen instead of hand-rolling table state.
 
 ## Client vs. server components
 
@@ -25,3 +26,4 @@
 ## Routing
 
 - Never hardcode a route string in a component. Use the `pageRoutes` constants from `lib/constants.ts` with `next/navigation`'s `useRouter()` or `next/link`.
+- Any screen that requires a logged-in user (CRM features included) belongs under the `app/(app)/` route group, which already handles the auth guard, forced-password-reset redirect, and role-gated sidebar shell. Read auth state via the `useAuth()` hook (`hooks/useAuth.ts`), never a raw `useAppSelector` on `state.auth`. See `specs/auth/auth-flow.md` for the full design.

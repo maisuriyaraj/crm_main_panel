@@ -1,11 +1,68 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { pageRoutes } from "@/lib/constants";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { reqToFetchMe, reqToLogin } from "@/lib/store/slices/authSlice";
+import { notify } from "@/lib/commonFunctions";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from "@/components/ui/form";
+
+const signInSchema = z.object({
+  email: z.string().min(1, "Email is required").email("Enter a valid email"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type SignInValues = z.infer<typeof signInSchema>;
 
 export default function LoginPage() {
+  const dispatch = useAppDispatch();
+  const router = useRouter();
+
+  const form = useForm<SignInValues>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: { email: "", password: "" },
+  });
+
+  const onSubmit = (values: SignInValues) => {
+    dispatch(
+      reqToLogin({
+        data: values,
+        onSuccess: () => {
+          dispatch(
+            reqToFetchMe({
+              data: null,
+              onSuccess: (me: { mustResetPassword?: boolean }) => {
+                router.replace(
+                  me?.mustResetPassword ? pageRoutes.resetPassword : pageRoutes.dashboard,
+                );
+              },
+              onFailure: () => {
+                notify("Signed in, but couldn't load your account. Please try again.", {
+                  type: "error",
+                });
+              },
+            }),
+          );
+        },
+        onFailure: () => {
+          notify("Invalid email or password.", { type: "error" });
+        },
+      }),
+    );
+  };
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-background">
 
@@ -119,47 +176,71 @@ export default function LoginPage() {
               Sign in to access your OrbitOps workspace.
             </p>
 
-            <form className="mt-8 space-y-5">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
 
-              <div>
-                <label className="mb-2 block text-sm">
-                  Email
-                </label>
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <label className="mb-2 block text-sm">
+                        Email
+                      </label>
 
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
 
-                  <input
-                    type="email"
-                    placeholder="name@company.com"
-                    className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 outline-none"
-                  />
-                </div>
-              </div>
+                          <input
+                            type="email"
+                            placeholder="name@company.com"
+                            className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 outline-none"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <div>
-                <label className="mb-2 block text-sm">
-                  Password
-                </label>
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <label className="mb-2 block text-sm">
+                        Password
+                      </label>
 
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
 
-                  <input
-                    type="password"
-                    placeholder="••••••••"
-                    className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 outline-none"
-                  />
-                </div>
-              </div>
+                          <input
+                            type="password"
+                            placeholder="••••••••"
+                            className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 outline-none"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              <button
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 font-semibold text-primary-foreground transition hover:opacity-90"
-              >
-                Sign In
-                <ArrowRight size={16} />
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  disabled={form.formState.isSubmitting}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+                >
+                  {form.formState.isSubmitting ? "Signing In..." : "Sign In"}
+                  <ArrowRight size={16} />
+                </button>
+              </form>
+            </Form>
 
             <div className="mt-6 text-center text-sm">
               <Link
