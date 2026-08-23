@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Activity, ArrowRight, BarChart3, Building2, Check, ChevronDown, CircleDollarSign, Clock3, Cloud, GraduationCap, HeartPulse, LineChart, Mail, Megaphone, Menu, MousePointer2, Play, Quote, Rocket, ShieldCheck, Sparkles, Store, Target, TrendingUp, Users, Workflow, X, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +8,6 @@ import { pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToGetPricingPlans } from "@/lib/store/slices/pricingPlansSlice";
 
-const fade = { initial: { opacity: 0, y: 24 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, margin: "-80px" }, transition: { duration: 0.6 } };
 const features = [
   { icon: Users, title: "CRM Management", tone: "text-primary bg-primary/10", items: ["Lead Management", "Contact Management", "Activity Tracking", "Notes & Attachments"] },
   { icon: TrendingUp, title: "Sales Pipeline", tone: "text-green-600 bg-green-500/10", items: ["Kanban Pipelines", "Deal Tracking", "Forecasting", "Follow-Up Management"] },
@@ -133,7 +131,7 @@ const footerLegal = ["Privacy Policy", "Terms", "Security"];
 const trustedBrands = ["NORTHSTAR", "VERTEX", "APERTURE", "MONOLITH", "SUMMIT"];
 
 function Logo() { return <a href="#top" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight"><span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground shadow-[var(--shadow-primary)]"><Rocket className="size-4" /></span>OrbitOps</a>; }
-function SectionHeading({ eyebrow, title, copy }: { eyebrow: string; title: string; copy: string }) { return <motion.div {...fade} className="mx-auto mb-12 max-w-2xl text-center"><p className="mb-3 text-xs font-bold uppercase tracking-[.18em] text-primary">{eyebrow}</p><h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2><p className="mt-4 text-pretty text-muted-foreground">{copy}</p></motion.div>; }
+function SectionHeading({ eyebrow, title, copy }: { eyebrow: string; title: string; copy: string }) { return <div className="mx-auto mb-12 max-w-2xl text-center"><p className="mb-3 text-xs font-bold uppercase tracking-[.18em] text-primary">{eyebrow}</p><h2 className="text-balance text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2><p className="mt-4 text-pretty text-muted-foreground">{copy}</p></div>; }
 
 function Dashboard() {
   return <div className="relative mx-auto mt-16 max-w-6xl">
@@ -172,7 +170,7 @@ function Dashboard() {
               <div className="mb-4 flex justify-between text-[10px]"><b>Revenue overview</b><span className="text-muted-foreground">Last 6 months</span></div>
               <div className="flex h-36 items-end gap-2">
                 {revenueBarHeights.map((h, i) => (
-                  <motion.span key={`rev-bar-${i}`} initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ delay: .5 + i * .04 }} className="flex-1 rounded-t-sm bg-primary/80" style={{ display: 'block' }} />
+                  <span key={`rev-bar-${i}`} className="flex-1 rounded-t-sm bg-primary/80" style={{ display: 'block', height: `${h}%` }} />
                 ))}
               </div>
             </div>
@@ -261,19 +259,19 @@ export default function Home() {
       <section id="solutions" className="px-5 py-24">
         <SectionHeading eyebrow="From chaos to clarity" title="Your tools should work together" copy="Stop losing momentum to scattered systems, manual work, and invisible customer journeys." />
         <div className="mx-auto grid max-w-6xl gap-px overflow-hidden rounded-2xl border bg-border md:grid-cols-3">
-          {solutionProblems.map(({ Icon, label }, i) => (
-            <motion.div {...fade} transition={{ delay: i * .05 }} key={label} className="bg-background p-7">
+          {solutionProblems.map(({ Icon, label }) => (
+            <div key={label} className="bg-background p-7">
               <Icon className="mb-5 size-5 text-destructive" />
               <h3 className="text-base font-semibold">{label}</h3>
               <p className="mt-2 text-sm leading-6 text-muted-foreground">One source of truth keeps every opportunity, action, and outcome in view.</p>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
 
       <section className="overflow-hidden bg-secondary/50 px-5 py-24">
         <div className="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-2">
-          <motion.div {...fade}>
+          <div>
             <p className="text-xs font-bold uppercase tracking-[.18em] text-primary">One intelligent platform</p>
             <h2 className="mt-3 text-4xl font-semibold tracking-tight">Meet the growth engine that connects every team.</h2>
             <p className="mt-5 leading-7 text-muted-foreground">OrbitOps unifies your customer data, workflows, conversations, revenue, and campaigns—so teams move faster with complete context.</p>
@@ -287,8 +285,8 @@ export default function Home() {
             <Button variant="hero" size="lg" className="mt-9" onClick={goToBookTrial}>
               Explore the platform <ArrowRight />
             </Button>
-          </motion.div>
-          <motion.div {...fade} className="relative rounded-2xl border bg-card p-5 panel-shadow">
+          </div>
+          <div className="relative rounded-2xl border bg-card p-5 panel-shadow">
             <div className="mb-5 flex items-center justify-between">
               <div><small className="text-muted-foreground">Customer 360°</small><h3 className="font-semibold">Olivia Martin</h3></div>
               <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600">High intent</span>
@@ -305,21 +303,21 @@ export default function Home() {
                 </div>
               ))}
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
       <section id="features" className="px-5 py-24">
         <SectionHeading eyebrow="Everything you need" title="One platform. Every growth lever." copy="Replace your fragmented stack with powerful, connected tools your whole team will actually use." />
         <div className="mx-auto grid max-w-6xl gap-5 md:grid-cols-2 lg:grid-cols-3">
-          {features.map((f, i) => (
-            <motion.article {...fade} transition={{ delay: i * .06 }} key={f.title} className="group rounded-2xl border bg-card p-7 transition hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl">
+          {features.map((f) => (
+            <article key={f.title} className="group rounded-2xl border bg-card p-7 transition hover:-translate-y-1 hover:border-primary/30 hover:shadow-xl">
               <span className={`grid size-11 place-items-center rounded-xl ${f.tone}`}><f.icon className="size-5" /></span>
               <h3 className="mt-5 text-lg font-semibold">{f.title}</h3>
               <ul className="mt-5 space-y-3">
                 {f.items.map(x => <li className="flex gap-2 text-sm text-muted-foreground" key={x}><Check className="size-4 text-emerald-600" />{x}</li>)}
               </ul>
-            </motion.article>
+            </article>
           ))}
         </div>
       </section>
@@ -330,7 +328,7 @@ export default function Home() {
           <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
             {screenTabs.map((x, i) => <Button key={x} onClick={() => setScreen(i)} variant={screen === i ? "default" : "ghost"} className="shrink-0 rounded-full">{x}</Button>)}
           </div>
-          <motion.div key={screen} initial={{ opacity: 0, scale: .98 }} animate={{ opacity: 1, scale: 1 }} className="overflow-hidden rounded-2xl border bg-card panel-shadow">
+          <div key={screen} className="overflow-hidden rounded-2xl border bg-card panel-shadow">
             <div className="flex h-12 items-center gap-2 border-b px-5">
               <span className="size-2.5 rounded-full bg-destructive" />
               <span className="size-2.5 rounded-full bg-lime-400" />
@@ -361,7 +359,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -370,11 +368,11 @@ export default function Home() {
         <div className="relative mx-auto grid max-w-6xl gap-6 md:grid-cols-3 lg:grid-cols-6">
           <div className="absolute left-[8%] right-[8%] top-6 hidden border-t border-dashed border-primary/40 lg:block" />
           {howItWorksSteps.map(({ title, desc }, i) => (
-            <motion.div {...fade} transition={{ delay: i * .08 }} key={title} className="relative text-center">
+            <div key={title} className="relative text-center">
               <span className="relative z-10 mx-auto grid size-12 place-items-center rounded-full border-4 border-background bg-primary font-display text-sm font-bold text-primary-foreground">{i + 1}</span>
               <h3 className="mt-5 text-sm font-semibold">{title}</h3>
               <p className="mt-2 text-xs leading-5 text-muted-foreground">{desc}</p>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -392,11 +390,11 @@ export default function Home() {
 
       <section className="bg-foreground px-5 py-20 text-background">
         <div className="mx-auto grid max-w-6xl grid-cols-2 gap-10 lg:grid-cols-4">
-          {stats.map(({ value, label }, i) => (
-            <motion.div {...fade} transition={{ delay: i * .08 }} className="text-center" key={value}>
+          {stats.map(({ value, label }) => (
+            <div className="text-center" key={value}>
               <strong className="font-display text-4xl sm:text-5xl">{value}</strong>
               <p className="mt-2 text-xs opacity-60 sm:text-sm">{label}</p>
-            </motion.div>
+            </div>
           ))}
         </div>
       </section>
@@ -404,15 +402,15 @@ export default function Home() {
       <section className="px-5 py-24">
         <SectionHeading eyebrow="Customer stories" title="Teams move faster with OrbitOps" copy="Real outcomes from leaders who replaced complexity with one connected platform." />
         <div className="mx-auto grid max-w-6xl gap-5 md:grid-cols-3">
-          {testimonials.map(({ quote, name, role }, i) => (
-            <motion.blockquote {...fade} transition={{ delay: i * .08 }} key={name} className="rounded-2xl border bg-card p-7">
+          {testimonials.map(({ quote, name, role }) => (
+            <blockquote key={name} className="rounded-2xl border bg-card p-7">
               <Quote className="size-7 text-primary/30" />
               <p className="mt-5 text-sm leading-7">&ldquo;{quote}&rdquo;</p>
               <footer className="mt-7 flex items-center gap-3">
                 <span className="grid size-10 place-items-center rounded-full bg-primary/10 text-sm font-bold text-primary">{name.split(" ").map(y => y[0]).join("")}</span>
                 <div><cite className="not-italic text-sm font-semibold">{name}</cite><p className="text-xs text-muted-foreground">{role}</p></div>
               </footer>
-            </motion.blockquote>
+            </blockquote>
           ))}
         </div>
       </section>
@@ -420,8 +418,8 @@ export default function Home() {
       <section id="pricing" className="bg-secondary/50 px-5 py-24">
         <SectionHeading eyebrow="Simple pricing" title="A plan for every stage of growth" copy="Start free, then scale on your terms. All plans include secure cloud hosting and support." />
         <div className="mx-auto grid max-w-7xl gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {pricingPlans.map((p, i) => (
-            <motion.article {...fade} transition={{ delay: i * .06 }} key={p.plan_name} className={`relative rounded-2xl border p-6 ${p.recommended ? "border-primary bg-card shadow-[var(--shadow-primary)]" : "bg-card"}`}>
+          {pricingPlans.map((p) => (
+            <article key={p.plan_name} className={`relative rounded-2xl border p-6 ${p.recommended ? "border-primary bg-card shadow-[var(--shadow-primary)]" : "bg-card"}`}>
               {p.recommended && <span className="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground">Most popular</span>}
               <h3 className="text-lg font-semibold">{p.plan_name}</h3>
               <p className="mt-2 min-h-10 text-xs text-muted-foreground">{p.plan_description}</p>
@@ -432,7 +430,7 @@ export default function Home() {
               <ul className="mt-6 space-y-3">
                 {p.plan_features.map(x => <li key={x} className="flex gap-2 text-xs"><Check className="size-4 text-emerald-600" />{x}</li>)}
               </ul>
-            </motion.article>
+            </article>
           ))}
         </div>
         {/* <div className="mx-auto mt-10 max-w-5xl overflow-x-auto rounded-2xl border bg-card">
@@ -462,14 +460,14 @@ export default function Home() {
               <button onClick={() => setFaq(faq === i ? -1 : i)} className="flex w-full items-center justify-between py-5 text-left text-sm font-semibold" aria-expanded={faq === i}>
                 {q}<ChevronDown className={`size-4 transition ${faq === i ? "rotate-180" : ""}`} />
               </button>
-              {faq === i && <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="pb-5 text-sm leading-6 text-muted-foreground">{a}</motion.p>}
+              {faq === i && <p className="pb-5 text-sm leading-6 text-muted-foreground">{a}</p>}
             </div>
           ))}
         </div>
       </section>
 
       <section className="px-5 pb-24">
-        <motion.div {...fade} className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-primary px-6 py-16 text-center text-primary-foreground shadow-[var(--shadow-primary)] sm:px-12">
+        <div className="relative mx-auto max-w-6xl overflow-hidden rounded-3xl bg-primary px-6 py-16 text-center text-primary-foreground shadow-[var(--shadow-primary)] sm:px-12">
           <div className="absolute inset-0 grid-fade opacity-20" />
           <Zap className="relative mx-auto mb-5 size-8" />
           <h2 className="relative text-balance text-3xl font-semibold sm:text-5xl">Ready to Scale Your Business with OrbitOps?</h2>
@@ -480,7 +478,7 @@ export default function Home() {
               <Play /> Schedule Demo
             </Button>
           </div>
-        </motion.div>
+        </div>
       </section>
     </main>
 

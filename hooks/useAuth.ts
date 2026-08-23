@@ -3,7 +3,7 @@ import { reqToLogout } from "@/lib/store/slices/authSlice";
 
 export function useAuth() {
     const dispatch = useAppDispatch();
-    const { user, isLoading, isAuthChecked } = useAppSelector((state) => state.auth);
+    const { user, isLoading, isAuthChecked, needResetPassword } = useAppSelector((state) => state.auth);
 
     const logout = (onDone?: () => void) => {
         dispatch(
@@ -21,6 +21,7 @@ export function useAuth() {
         isAuthenticated: !!user,
         isAuthChecked,
         isLoading,
+        needResetPassword,
         logout,
     };
 }

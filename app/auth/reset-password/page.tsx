@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,11 +9,12 @@ import { Lock } from "lucide-react";
 
 import { pageRoutes } from "@/lib/constants";
 import { useAppDispatch } from "@/lib/store/hooks";
-import { reqToFetchMe, reqToResetPassword, setUser } from "@/lib/store/slices/authSlice";
+import { reqToFetchMe, reqToResetPassword } from "@/lib/store/slices/authSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { notify } from "@/lib/commonFunctions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Form,
   FormControl,
@@ -39,7 +39,7 @@ type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 export default function ResetPasswordPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { user, isAuthChecked } = useAuth();
+  const { user, isAuthChecked, needResetPassword } = useAuth();
 
   const form = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -60,21 +60,26 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (!user.mustResetPassword) {
-      router.replace(pageRoutes.dashboard);
-    }
   }, [isAuthChecked, user, router]);
 
   const onSubmit = (values: ResetPasswordValues) => {
     dispatch(
       reqToResetPassword({
-        data: { newPassword: values.newPassword },
+        data: { new_password: values.newPassword, new_creation : 1},
         onSuccess: () => {
           notify("Password updated. Welcome in!", { type: "success" });
-          if (user) {
-            dispatch(setUser({ ...user, mustResetPassword: false }));
-          }
-          router.replace(pageRoutes.dashboard);
+          dispatch(
+            reqToFetchMe({
+              data: null,
+              onSuccess: (me: { data:any }) => {
+                router.replace(`/${me?.data?.organizationId}/${pageRoutes.dashboard}`);
+              },
+              onFailure: () => {
+                notify("Password updated. Please sign in again.", { type: "info" });
+                router.replace(pageRoutes.signin);
+              },
+            }),
+          );
         },
         onFailure: () => {
           notify("Couldn't update your password. Please try again.", { type: "error" });
@@ -83,26 +88,13 @@ export default function ResetPasswordPage() {
     );
   };
 
-  if (!isAuthChecked || !user || !user.mustResetPassword) {
-    return null;
-  }
-
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-6">
       <div className="absolute inset-0 overflow-hidden">
-        <motion.div
-          animate={{ x: [0, 120, 0], y: [0, -80, 0] }}
-          transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-          className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]"
-        />
+        <div className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]" />
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 25 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative z-10 w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow"
-      >
+      <div className="relative z-10 w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
         <h1 className="text-3xl font-bold">Set a New Password</h1>
 
         <p className="mt-2 text-muted-foreground">
@@ -150,7 +142,7 @@ export default function ResetPasswordPage() {
             </Button>
           </form>
         </Form>
-      </motion.div>
+      </div>
     </div>
   );
 }

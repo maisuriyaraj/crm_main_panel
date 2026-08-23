@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -43,9 +42,9 @@ export default function LoginPage() {
           dispatch(
             reqToFetchMe({
               data: null,
-              onSuccess: (me: { mustResetPassword?: boolean }) => {
+              onSuccess: (me: { data:any }) => {
                 router.replace(
-                  me?.mustResetPassword ? pageRoutes.resetPassword : pageRoutes.dashboard,
+                  me?.data?.mustResetPassword ? pageRoutes.resetPassword : `/${me?.data?.organizationId}/${pageRoutes.dashboard}`,
                 );
               },
               onFailure: () => {
@@ -68,31 +67,9 @@ export default function LoginPage() {
 
       {/* Background Glow */}
       <div className="absolute inset-0 overflow-hidden">
-        <motion.div
-          animate={{
-            x: [0, 120, 0],
-            y: [0, -80, 0],
-          }}
-          transition={{
-            duration: 18,
-            repeat: Infinity,
-            ease: "linear",
-          }}
-          className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]"
-        />
+        <div className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]" />
 
-        <motion.div
-          animate={{
-            x: [0, -120, 0],
-            y: [0, 80, 0],
-          }}
-          transition={{
-            duration: 22,
-            repeat: Infinity,
-            ease: "linear",
-          }}
-          className="absolute bottom-20 right-20 h-[450px] w-[450px] rounded-full bg-cyan-500/20 blur-[140px]"
-        />
+        <div className="absolute bottom-20 right-20 h-[450px] w-[450px] rounded-full bg-cyan-500/20 blur-[140px]" />
       </div>
 
       <div className="relative z-10 grid min-h-screen lg:grid-cols-2">
@@ -111,12 +88,7 @@ export default function LoginPage() {
             </p>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow"
-          >
+          <div className="rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
             <div className="mb-6 flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 Monthly Revenue
@@ -152,7 +124,7 @@ export default function LoginPage() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
 
           <div className="text-sm text-muted-foreground">
             Powered by RJ Industries
@@ -162,12 +134,7 @@ export default function LoginPage() {
         {/* Right */}
         <div className="flex items-center justify-center px-6 py-12">
 
-          <motion.div
-            initial={{ opacity: 0, y: 25 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow"
-          >
+          <div className="w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
             <h1 className="text-3xl font-bold">
               Welcome Back
             </h1>
@@ -260,7 +227,7 @@ export default function LoginPage() {
                 Start Free Trial
               </Link>
             </div>
-          </motion.div>
+          </div>
         </div>
       </div>
     </div>

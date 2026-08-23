@@ -8,7 +8,22 @@ export const pageRoutes = {
     resetPassword: "/auth/reset-password",
     dashboard: "/dashboard",
     settingsTeam: "/settings/team",
+    leads: "/leads",
+    contacts: "/contacts",
+    companies: "/companies",
+    deals: "/deals",
+    tasks: "/tasks",
+    adsManagerOverview: "/ads-manager/overview",
+    adsManagerCampaigns: "/ads-manager/campaigns",
+    adsManagerAnalytics: "/ads-manager/analytics",
+    adsManagerAssets: "/ads-manager/assets",
+    adsManagerAccountCenter: "/ads-manager/account-center",
+    growth: "/growth",
 }
+
+// Joins an org id/slug with a pageRoutes value. `route` already carries its
+// own leading slash, so this must not add a second one between the two.
+export const buildOrgRoute = (orgSlug: string, route: string) => `/${orgSlug}${route}`;
 
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",

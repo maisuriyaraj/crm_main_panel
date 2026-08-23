@@ -24,7 +24,7 @@ import {
 
 export interface DataTableColumn<T> {
   key: string;
-  header: string;
+  header: React.ReactNode;
   sortable?: boolean;
   render?: (row: T) => React.ReactNode;
   accessor?: (row: T) => string | number | null | undefined;

@@ -39,7 +39,7 @@ export default function TeamSettingsPage() {
 
   useEffect(() => {
     if (role && role !== "org_admin") {
-      router.replace(pageRoutes.dashboard);
+      // router.replace(pageRoutes.dashboard);
     }
   }, [role, router]);
 

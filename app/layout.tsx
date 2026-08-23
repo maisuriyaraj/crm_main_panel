@@ -31,9 +31,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <StoreProvider>
-
-        <body className="min-h-full flex flex-col">{children}</body>
-        <Toaster richColors position="top-right" />
+        <body className="min-h-full flex flex-col">
+          {children}
+          <Toaster richColors position="top-right" />
+        </body>
       </StoreProvider>
     </html>
   );

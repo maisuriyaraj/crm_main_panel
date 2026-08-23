@@ -1,6 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Formik, Form, Field, ErrorMessage } from "formik";
 import * as Yup from "yup";
 import { reqToBookADemo } from "@/lib/store/slices/publicAPisSlice";
@@ -103,28 +102,15 @@ export default function BookDemo() {
         <div className="relative min-h-screen overflow-hidden bg-background">
             {/* Background Glow */}
             <div className="absolute inset-0 overflow-hidden">
-                <motion.div
-                    animate={{ x: [0, 120, 0], y: [0, -80, 0] }}
-                    transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-                    className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]"
-                />
+                <div className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]" />
 
-                <motion.div
-                    animate={{ x: [0, -120, 0], y: [0, 80, 0] }}
-                    transition={{ duration: 22, repeat: Infinity, ease: "linear" }}
-                    className="absolute bottom-20 right-20 h-[450px] w-[450px] rounded-full bg-cyan-500/20 blur-[140px]"
-                />
+                <div className="absolute bottom-20 right-20 h-[450px] w-[450px] rounded-full bg-cyan-500/20 blur-[140px]" />
             </div>
 
             <div className="relative z-10 grid min-h-screen lg:grid-cols-2">
                 {/* Left */}
                 <div className="hidden lg:flex flex-col justify-between p-16">
-                    <motion.div
-                        initial={{ opacity: 0, y: 40 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.8 }}
-                        className="rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow"
-                    >
+                    <div className="rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
                         <div>
                             <h1 className="text-5xl font-bold leading-tight">
                                 See OrbitOps
@@ -144,7 +130,7 @@ export default function BookDemo() {
                                 <div>✓ Get Your Questions Answered Live</div>
                             </div>
                         </div>
-                    </motion.div>
+                    </div>
 
                     <div className="text-sm text-muted-foreground">
                         Powered by RJ Industries
@@ -153,12 +139,7 @@ export default function BookDemo() {
 
                 {/* Right */}
                 <div className="flex items-center justify-center px-6 py-12">
-                    <motion.div
-                        initial={{ opacity: 0, y: 25 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow"
-                    >
+                    <div className="w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
                         <h1 className="text-3xl font-bold">Book a Demo</h1>
 
                         <p className="mt-2 text-muted-foreground">
@@ -285,7 +266,7 @@ export default function BookDemo() {
                                 </Form>
                             )}
                         </Formik>
-                    </motion.div>
+                    </div>
                 </div>
             </div>
         </div>

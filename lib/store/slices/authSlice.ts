@@ -4,10 +4,10 @@ import { createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { apiRoutes } from "@/lib/constants";
 
 export interface AuthUser {
-    id: string;
+    id: number;
     email: string;
     role: string;
-    organizationId: string;
+    organizationId: number;
     fullName: string;
     mustResetPassword: boolean;
 }
@@ -17,6 +17,7 @@ interface AuthState {
     isLoading: boolean;
     user: AuthUser | null;
     isAuthChecked: boolean;
+    needResetPassword: boolean;
 }
 
 const initialState: AuthState = {
@@ -24,6 +25,7 @@ const initialState: AuthState = {
     isLoading: false,
     user: null,
     isAuthChecked: false,
+    needResetPassword: false,
 };
 
 export const reqToLogin = createAsyncThunk<
@@ -56,7 +58,7 @@ export const reqToLogin = createAsyncThunk<
 export const reqToFetchMe = createAsyncThunk<
     any,
     any,
-    { rejectValue: { message: string } }
+    { rejectValue: { message: string; needResetPassword?: boolean } }
 >(
     "auth/reqToFetchMe",
     async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
@@ -69,8 +71,17 @@ export const reqToFetchMe = createAsyncThunk<
         } catch (error: any) {
             onFailure?.(error);
 
+            // Backend flags a first-login temp password this way: /me itself
+            // 400s instead of succeeding, with needResetPassword in the body
+            // (seen either flat or nested under `data`, so check both).
+            const errorBody = error?.response?.data;
+            const needResetPassword =
+                error?.response?.status === 400 &&
+                !!(errorBody?.needResetPassword || errorBody?.data?.needResetPassword);
+
             return rejectWithValue({
                 message: error?.response?.data?.message || "Failed to fetch account",
+                needResetPassword,
             });
         }
     }
@@ -85,10 +96,19 @@ export const reqToResetPassword = createAsyncThunk<
     async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
         try {
             const response = await Axios.post(apiRoutes.resetPassword, data);
+            const result = response.data?.data;
 
-            onSuccess?.(response.data);
+            // The refresh token itself never appears here — like login, the
+            // backend sets it as an httpOnly cookie, which the browser
+            // already stores/resends for us via the shared Axios instance's
+            // withCredentials: true.
+            if (result?.accessToken) {
+                setAccessToken(result.accessToken);
+            }
 
-            return response.data;
+            onSuccess?.(result);
+
+            return result;
         } catch (error: any) {
             onFailure?.(error);
 
@@ -158,6 +178,7 @@ const authSlice = createSlice({
         },
         clearAuth: (state) => {
             state.user = null;
+            state.needResetPassword = false;
             state.isAuthChecked = true;
         },
     },
@@ -182,13 +203,21 @@ const authSlice = createSlice({
         builder.addCase(reqToFetchMe.fulfilled, (state, action) => {
             state.isLoading = false;
             state.error = null;
-            state.user = action.payload;
+            // The backend wraps this in { message, status, data: {...} },
+            // same envelope as reset-password — store the inner user object.
+            state.user = action.payload?.data ?? action.payload;
+            state.needResetPassword = false;
             state.isAuthChecked = true;
         });
         builder.addCase(reqToFetchMe.rejected, (state, action) => {
             state.isLoading = false;
             state.error = action.payload?.message || "An error occurred";
-            state.user = null;
+            state.needResetPassword = !!action.payload?.needResetPassword;
+            // A temp-password 400 isn't a real logout — keep going with the
+            // existing token so the user can reset their password with it.
+            if (!state.needResetPassword) {
+                state.user = null;
+            }
             state.isAuthChecked = true;
         });
 
@@ -196,9 +225,13 @@ const authSlice = createSlice({
             state.isLoading = true;
             state.error = null;
         });
-        builder.addCase(reqToResetPassword.fulfilled, (state) => {
+        builder.addCase(reqToResetPassword.fulfilled, (state, action) => {
             state.isLoading = false;
             state.error = null;
+            state.needResetPassword = false;
+            if (action.payload?.user) {
+                state.user = action.payload.user;
+            }
         });
         builder.addCase(reqToResetPassword.rejected, (state, action) => {
             state.isLoading = false;
