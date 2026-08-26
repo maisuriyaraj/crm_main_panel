@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { ownerName, type Lead } from "@/lib/leads/demo-data";
+import { resolveOwnerName, type Lead, type LeadOwner } from "@/lib/leads/types";
 
 const TEMPERATURE_DOT: Record<Lead["temperature"], string> = {
   hot: "bg-destructive",
@@ -25,10 +25,11 @@ const initials = (name: string) =>
 
 interface KanbanCardProps {
   lead: Lead;
+  owners: LeadOwner[];
   onOpen: (leadId: string) => void;
 }
 
-export function KanbanCard({ lead, onOpen }: KanbanCardProps) {
+export function KanbanCard({ lead, owners, onOpen }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
   });
@@ -79,7 +80,7 @@ export function KanbanCard({ lead, onOpen }: KanbanCardProps) {
           {lead.assignedTo && (
             <Avatar className="h-6 w-6">
               <AvatarFallback className="text-[10px]">
-                {initials(ownerName(lead.assignedTo))}
+                {initials(resolveOwnerName(owners, lead.assignedTo))}
               </AvatarFallback>
             </Avatar>
           )}

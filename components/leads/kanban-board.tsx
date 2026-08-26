@@ -14,17 +14,18 @@ import {
 
 import { cn } from "@/lib/utils";
 import { KanbanCard } from "@/components/leads/kanban-card";
-import { DEMO_LEAD_STATUSES, type Lead } from "@/lib/leads/demo-data";
+import type { Lead, LeadOwner, LeadStage } from "@/lib/leads/types";
 
 interface KanbanColumnProps {
   stageId: string;
   name: string;
   color: string;
   leads: Lead[];
+  owners: LeadOwner[];
   onOpen: (leadId: string) => void;
 }
 
-function KanbanColumn({ stageId, name, color, leads, onOpen }: KanbanColumnProps) {
+function KanbanColumn({ stageId, name, color, leads, owners, onOpen }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stageId });
 
   const totalValue = leads.reduce((sum, lead) => sum + (lead.value ?? 0), 0);
@@ -50,7 +51,7 @@ function KanbanColumn({ stageId, name, color, leads, onOpen }: KanbanColumnProps
         )}
       >
         {leads.map((lead) => (
-          <KanbanCard key={lead.id} lead={lead} onOpen={onOpen} />
+          <KanbanCard key={lead.id} lead={lead} owners={owners} onOpen={onOpen} />
         ))}
         {leads.length === 0 && (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">No leads in this stage</p>
@@ -62,15 +63,17 @@ function KanbanColumn({ stageId, name, color, leads, onOpen }: KanbanColumnProps
 
 interface KanbanBoardProps {
   leads: Lead[];
+  statuses: LeadStage[];
+  owners: LeadOwner[];
   onOpen: (leadId: string) => void;
   onMoveLead: (leadId: string, newStatusId: string) => void;
 }
 
-export function KanbanBoard({ leads, onOpen, onMoveLead }: KanbanBoardProps) {
+export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: KanbanBoardProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const stages = [...DEMO_LEAD_STATUSES].sort((a, b) => a.sortOrder - b.sortOrder);
+  const stages = [...statuses].sort((a, b) => a.sortOrder - b.sortOrder);
 
   const handleDragStart = (event: DragStartEvent) => {
     const lead = leads.find((l) => l.id === event.active.id);
@@ -100,6 +103,7 @@ export function KanbanBoard({ leads, onOpen, onMoveLead }: KanbanBoardProps) {
             name={stage.name}
             color={stage.color}
             leads={leads.filter((lead) => lead.statusId === stage.id)}
+            owners={owners}
             onOpen={onOpen}
           />
         ))}
@@ -108,7 +112,7 @@ export function KanbanBoard({ leads, onOpen, onMoveLead }: KanbanBoardProps) {
       <DragOverlay>
         {activeLead ? (
           <div className="w-72">
-            <KanbanCard lead={activeLead} onOpen={() => {}} />
+            <KanbanCard lead={activeLead} owners={owners} onOpen={() => {}} />
           </div>
         ) : null}
       </DragOverlay>

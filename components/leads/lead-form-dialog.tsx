@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import { DEMO_LEAD_STATUSES, DEMO_OWNERS, type Lead, type LeadPriority, type LeadTemperature } from "@/lib/leads/demo-data";
+import type { Lead, LeadOwner, LeadPriority, LeadStage, LeadTemperature } from "@/lib/leads/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,7 +54,7 @@ const leadFormSchema = z.object({
 
 export type LeadFormValues = z.infer<typeof leadFormSchema>;
 
-const emptyValues: LeadFormValues = {
+const buildEmptyValues = (statuses: LeadStage[]): LeadFormValues => ({
   fullName: "",
   companyName: "",
   email: "",
@@ -63,14 +63,14 @@ const emptyValues: LeadFormValues = {
   website: "",
   priority: "medium",
   temperature: "warm",
-  statusId: DEMO_LEAD_STATUSES[0]?.id ?? "",
+  statusId: statuses[0]?.id ?? "",
   assignedTo: "",
   value: "",
   probability: "",
   leadScore: "0",
   description: "",
   tags: [],
-};
+});
 
 const toFormValues = (lead: Lead): LeadFormValues => ({
   fullName: lead.fullName,
@@ -94,6 +94,8 @@ interface LeadFormDialogProps {
   trigger: React.ReactNode;
   mode: "create" | "edit";
   initialLead?: Lead;
+  statuses: LeadStage[];
+  owners: LeadOwner[];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onSubmit: (values: LeadFormValues) => void;
@@ -103,6 +105,8 @@ export function LeadFormDialog({
   trigger,
   mode,
   initialLead,
+  statuses,
+  owners,
   open: controlledOpen,
   onOpenChange,
   onSubmit,
@@ -113,13 +117,13 @@ export function LeadFormDialog({
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
-    defaultValues: emptyValues,
+    defaultValues: buildEmptyValues(statuses),
   });
 
   useEffect(() => {
     if (!open) return;
-    form.reset(mode === "edit" && initialLead ? toFormValues(initialLead) : emptyValues);
-  }, [open, mode, initialLead, form]);
+    form.reset(mode === "edit" && initialLead ? toFormValues(initialLead) : buildEmptyValues(statuses));
+  }, [open, mode, initialLead, statuses, form]);
 
   const handleSubmit = (values: LeadFormValues) => {
     onSubmit(values);
@@ -235,7 +239,7 @@ export function LeadFormDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {DEMO_LEAD_STATUSES.map((stage) => (
+                        {statuses.map((stage) => (
                           <SelectItem key={stage.id} value={stage.id}>
                             {stage.name}
                           </SelectItem>
@@ -260,7 +264,7 @@ export function LeadFormDialog({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {DEMO_OWNERS.map((owner) => (
+                        {owners.map((owner) => (
                           <SelectItem key={owner.id} value={owner.id}>
                             {owner.fullName}
                           </SelectItem>

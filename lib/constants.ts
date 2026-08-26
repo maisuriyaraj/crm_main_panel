@@ -35,4 +35,7 @@ export const apiRoutes = {
     me: "/api/auth/me",
     resetPassword: "/api/auth/reset-password",
     appUsers: "/api/app/users",
+    leads: "/api/leads",
+    leadStatuses: "/api/leads/statuses",
+    leadNotes: "/api/leads/notes",
 }

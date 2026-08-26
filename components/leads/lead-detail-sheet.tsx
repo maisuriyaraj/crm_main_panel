@@ -5,13 +5,14 @@ import { formatDistanceToNow } from "date-fns";
 import { Pencil, Trash2 } from "lucide-react";
 
 import {
-  DEMO_LEAD_STATUSES,
-  ownerName,
+  resolveOwnerName,
   type Lead,
   type LeadActivity,
   type LeadActivityType,
   type LeadNote,
-} from "@/lib/leads/demo-data";
+  type LeadOwner,
+  type LeadStage,
+} from "@/lib/leads/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,8 @@ interface LeadDetailSheetProps {
   lead: Lead | null;
   activities: LeadActivity[];
   notes: LeadNote[];
+  statuses: LeadStage[];
+  owners: LeadOwner[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (lead: Lead) => void;
@@ -51,6 +54,8 @@ export function LeadDetailSheet({
   lead,
   activities,
   notes,
+  statuses,
+  owners,
   open,
   onOpenChange,
   onEdit,
@@ -69,7 +74,7 @@ export function LeadDetailSheet({
 
   if (!lead) return null;
 
-  const stage = DEMO_LEAD_STATUSES.find((s) => s.id === lead.statusId);
+  const stage = statuses.find((s) => s.id === lead.statusId);
 
   const handleLogActivity = () => {
     if (!activitySubject.trim()) return;
@@ -112,7 +117,7 @@ export function LeadDetailSheet({
             )}
             <Badge variant="secondary" className="capitalize">{lead.priority}</Badge>
             <Badge variant="secondary" className="capitalize">{lead.temperature}</Badge>
-            {lead.assignedTo && <Badge variant="outline">{ownerName(lead.assignedTo)}</Badge>}
+            {lead.assignedTo && <Badge variant="outline">{resolveOwnerName(owners, lead.assignedTo)}</Badge>}
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-sm">

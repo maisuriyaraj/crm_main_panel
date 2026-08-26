@@ -9,7 +9,7 @@ import { Mail, Lock, ArrowRight } from "lucide-react";
 import { pageRoutes } from "@/lib/constants";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToLogin } from "@/lib/store/slices/authSlice";
-import { notify } from "@/lib/commonFunctions";
+import { handleCookieActions, handleLocalStorageActions, notify } from "@/lib/commonFunctions";
 import {
   Form,
   FormControl,
@@ -42,7 +42,9 @@ export default function LoginPage() {
           dispatch(
             reqToFetchMe({
               data: null,
-              onSuccess: (me: { data:any }) => {
+              onSuccess: (me: { data: any }) => {
+                handleLocalStorageActions("set", "user", me.data);
+                handleCookieActions("set", "user", me.data, { expires: 3600 });
                 router.replace(
                   me?.data?.mustResetPassword ? pageRoutes.resetPassword : `/${me?.data?.organizationId}/${pageRoutes.dashboard}`,
                 );

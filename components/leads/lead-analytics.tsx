@@ -11,10 +11,11 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { DEMO_LEAD_STATUSES, type Lead, type LeadTemperature } from "@/lib/leads/demo-data";
+import type { Lead, LeadStage, LeadTemperature } from "@/lib/leads/types";
 
 interface LeadAnalyticsProps {
   leads: Lead[];
+  statuses: LeadStage[];
 }
 
 const TEMPERATURE_LABEL: Record<LeadTemperature, string> = {
@@ -33,8 +34,8 @@ const trendConfig: ChartConfig = {
 
 const formatCurrency = (value: number) => `₹${value.toLocaleString("en-IN")}`;
 
-export function LeadAnalytics({ leads }: LeadAnalyticsProps) {
-  const stages = useMemo(() => [...DEMO_LEAD_STATUSES].sort((a, b) => a.sortOrder - b.sortOrder), []);
+export function LeadAnalytics({ leads, statuses }: LeadAnalyticsProps) {
+  const stages = useMemo(() => [...statuses].sort((a, b) => a.sortOrder - b.sortOrder), [statuses]);
 
   const stats = useMemo(() => {
     const wonStageIds = new Set(stages.filter((s) => s.isWon).map((s) => s.id));

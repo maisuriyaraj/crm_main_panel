@@ -1,22 +1,32 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 
 import { notify } from "@/lib/commonFunctions";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { useAuth } from "@/hooks/useAuth";
 import {
-  DEMO_ACTIVITIES,
-  DEMO_LEAD_STATUSES,
-  DEMO_LEADS,
-  DEMO_NOTES,
-  DEMO_OWNERS,
-  ownerName,
-  type Lead,
-  type LeadActivity,
-  type LeadActivityType,
-  type LeadNote,
-} from "@/lib/leads/demo-data";
+  reqToAddLeadActivity,
+  reqToBulkDeleteLeads,
+  reqToBulkUpdateLeads,
+  reqToChangeLeadStage,
+  reqToCreateLead,
+  reqToCreateLeadNote,
+  reqToDeleteLead,
+  reqToDeleteLeadNote,
+  reqToGetLeadActivities,
+  reqToGetLeadNotes,
+  reqToGetLeadStatuses,
+  reqToGetLeads,
+  reqToUpdateLead,
+  reqToUpdateLeadNote,
+} from "@/lib/store/slices/leadsSlice";
+import { reqToGetOrgUsers } from "@/lib/store/slices/orgUsersSlice";
+import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
+import { resolveOwnerName, type Lead, type LeadActivityType } from "@/lib/leads/types";
+import { FALLBACK_LEAD_STATUSES, FALLBACK_OWNERS } from "@/lib/leads/fallback-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -55,24 +65,34 @@ const PRIORITY_VARIANT: Record<Lead["priority"], "default" | "secondary" | "outl
   urgent: "destructive",
 };
 
-let demoIdCounter = 1000;
-const nextId = (prefix: string) => `${prefix}${demoIdCounter++}`;
-const nowIso = () => new Date().toISOString();
-const toNumber = (value: string | undefined): number | undefined => {
-  if (!value || value.trim() === "") return undefined;
-  const parsed = Number(value);
-  return Number.isNaN(parsed) ? undefined : parsed;
-};
+// Fetches once with a generous page size and relies on client-side
+// filter/search/sort (matches the DataTable's existing client-side mode).
+// Revisit with real server-driven pagination if a single org's lead count
+// starts approaching this.
+const LEADS_FETCH_LIMIT = 1000;
 
 export default function LeadsPage() {
+  const dispatch = useAppDispatch();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const view = (searchParams.get("view") as ViewMode) || "list";
 
-  const [leads, setLeads] = useState<Lead[]>(DEMO_LEADS);
-  const [activities, setActivities] = useState<LeadActivity[]>(DEMO_ACTIVITIES);
-  const [notes, setNotes] = useState<LeadNote[]>(DEMO_NOTES);
+  const { role } = useAuth();
+  const isAdmin = role === "org_admin";
+
+  const { leads, isLoading } = useAppSelector((state) => state.leads);
+  const apiStatuses = useAppSelector((state) => state.leads.statuses);
+  const activities = useAppSelector((state) => state.leads.activeLeadActivities);
+  const notes = useAppSelector((state) => state.leads.activeLeadNotes);
+  const apiOwners = useAppSelector((state) => state.orgUsers.users);
+
+  // Stopgap: the backend isn't seeded/ready for every org yet (empty
+  // statuses list) and the org-users list is admin-only, so it 403s for
+  // non-admins. Fall back to static placeholders so the form isn't blocked;
+  // real data takes over automatically once either is actually populated.
+  const statuses = apiStatuses.length > 0 ? apiStatuses : FALLBACK_LEAD_STATUSES;
+  const owners = apiOwners.length > 0 ? apiOwners : FALLBACK_OWNERS;
 
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -91,6 +111,23 @@ export default function LeadsPage() {
     params.set("view", next);
     router.replace(`${pathname}?${params.toString()}`);
   };
+
+  const refreshLeads = () => {
+    dispatch(reqToGetLeads({ data: { limit: LEADS_FETCH_LIMIT } }));
+  };
+
+  useEffect(() => {
+    refreshLeads();
+    dispatch(reqToGetLeadStatuses({ data: null }));
+    dispatch(reqToGetOrgUsers({ data: null }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!detailLeadId) return;
+    dispatch(reqToGetLeadActivities({ data: { id: detailLeadId, limit: 100 } }));
+    dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
+  }, [detailLeadId, dispatch]);
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -119,119 +156,122 @@ export default function LeadsPage() {
     setFormOpen(true);
   };
 
-  const logStageChangeActivity = (lead: Lead, newStatusId: string) => {
-    const fromName = DEMO_LEAD_STATUSES.find((s) => s.id === lead.statusId)?.name ?? "Unknown";
-    const toName = DEMO_LEAD_STATUSES.find((s) => s.id === newStatusId)?.name ?? "Unknown";
-    setActivities((prev) => [
-      ...prev,
-      {
-        id: nextId("a"),
-        leadId: lead.id,
-        activityType: "note",
-        subject: `Stage changed from ${fromName} to ${toName}`,
-        createdBy: lead.assignedTo ?? DEMO_OWNERS[0].id,
-        createdAt: nowIso(),
-      },
-    ]);
-  };
-
   const handleFormSubmit = (values: LeadFormValues) => {
+    const apiBody = mapLeadPayloadToApi(values);
+
     if (formMode === "create") {
-      const newLead: Lead = {
-        id: nextId("l"),
-        fullName: values.fullName,
-        companyName: values.companyName || undefined,
-        email: values.email || undefined,
-        mobile: values.mobile || undefined,
-        designation: values.designation || undefined,
-        website: values.website || undefined,
-        priority: values.priority,
-        temperature: values.temperature,
-        leadScore: toNumber(values.leadScore) ?? 0,
-        value: toNumber(values.value),
-        probability: toNumber(values.probability),
-        description: values.description || undefined,
-        statusId: values.statusId,
-        assignedTo: values.assignedTo || undefined,
-        tags: values.tags,
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      };
-      setLeads((prev) => [newLead, ...prev]);
-      notify("Lead created.", { type: "success" });
+      dispatch(
+        reqToCreateLead({
+          data: apiBody,
+          onSuccess: () => {
+            notify("Lead created.", { type: "success" });
+            refreshLeads();
+          },
+          onFailure: () => notify("Couldn't create lead. Please try again.", { type: "error" }),
+        }),
+      );
       return;
     }
 
     if (!editLead) return;
-    if (editLead.statusId !== values.statusId) {
-      logStageChangeActivity(editLead, values.statusId);
+
+    const { status_id, ...otherFields } = apiBody;
+    const stageChanged = editLead.statusId !== values.statusId;
+
+    const updateRemainingFields = () => {
+      dispatch(
+        reqToUpdateLead({
+          data: { id: editLead.id, ...otherFields },
+          onSuccess: () => {
+            notify("Lead updated.", { type: "success" });
+            refreshLeads();
+          },
+          onFailure: () => notify("Couldn't update lead. Please try again.", { type: "error" }),
+        }),
+      );
+    };
+
+    if (stageChanged) {
+      // The dedicated stage endpoint is what writes the "Stage changed"
+      // activity log entry server-side — a plain field PATCH doesn't log it.
+      dispatch(
+        reqToChangeLeadStage({
+          data: { id: editLead.id, status_id },
+          onSuccess: updateRemainingFields,
+          onFailure: () => notify("Couldn't change lead stage. Please try again.", { type: "error" }),
+        }),
+      );
+    } else {
+      updateRemainingFields();
     }
-    setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === editLead.id
-          ? {
-              ...lead,
-              fullName: values.fullName,
-              companyName: values.companyName || undefined,
-              email: values.email || undefined,
-              mobile: values.mobile || undefined,
-              designation: values.designation || undefined,
-              website: values.website || undefined,
-              priority: values.priority,
-              temperature: values.temperature,
-              leadScore: toNumber(values.leadScore) ?? 0,
-              value: toNumber(values.value),
-              probability: toNumber(values.probability),
-              description: values.description || undefined,
-              statusId: values.statusId,
-              assignedTo: values.assignedTo || undefined,
-              tags: values.tags,
-              updatedAt: nowIso(),
-            }
-          : lead,
-      ),
-    );
-    notify("Lead updated.", { type: "success" });
   };
 
   const handleDelete = (id: string) => {
-    setLeads((prev) => prev.filter((lead) => lead.id !== id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    notify("Lead deleted.", { type: "success" });
+    dispatch(
+      reqToDeleteLead({
+        data: { id },
+        onSuccess: () => {
+          notify("Lead deleted.", { type: "success" });
+          setSelectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+          refreshLeads();
+        },
+        onFailure: () => notify("Couldn't delete lead. Please try again.", { type: "error" }),
+      }),
+    );
   };
 
   const handleBulkDelete = () => {
-    setLeads((prev) => prev.filter((lead) => !selectedIds.has(lead.id)));
-    notify(`${selectedIds.size} lead(s) deleted.`, { type: "success" });
-    setSelectedIds(new Set());
+    dispatch(
+      reqToBulkDeleteLeads({
+        data: { ids: Array.from(selectedIds) },
+        onSuccess: () => {
+          notify(`${selectedIds.size} lead(s) deleted.`, { type: "success" });
+          setSelectedIds(new Set());
+          refreshLeads();
+        },
+        onFailure: () => notify("Couldn't delete leads. Please try again.", { type: "error" }),
+      }),
+    );
   };
 
   const handleBulkStageChange = (stageId: string) => {
-    setLeads((prev) =>
-      prev.map((lead) => (selectedIds.has(lead.id) ? { ...lead, statusId: stageId, updatedAt: nowIso() } : lead)),
+    dispatch(
+      reqToBulkUpdateLeads({
+        data: { ids: Array.from(selectedIds), data: { status_id: stageId } },
+        onSuccess: () => {
+          notify(`Moved ${selectedIds.size} lead(s).`, { type: "success" });
+          setSelectedIds(new Set());
+          refreshLeads();
+        },
+        onFailure: () => notify("Couldn't move leads. Please try again.", { type: "error" }),
+      }),
     );
-    notify(`Moved ${selectedIds.size} lead(s).`, { type: "success" });
-    setSelectedIds(new Set());
   };
 
   const handleBulkAssign = (ownerId: string) => {
-    setLeads((prev) =>
-      prev.map((lead) => (selectedIds.has(lead.id) ? { ...lead, assignedTo: ownerId, updatedAt: nowIso() } : lead)),
+    dispatch(
+      reqToBulkUpdateLeads({
+        data: { ids: Array.from(selectedIds), data: { assigned_to: ownerId } },
+        onSuccess: () => {
+          notify(`Reassigned ${selectedIds.size} lead(s).`, { type: "success" });
+          setSelectedIds(new Set());
+          refreshLeads();
+        },
+        onFailure: () => notify("Couldn't reassign leads. Please try again.", { type: "error" }),
+      }),
     );
-    notify(`Reassigned ${selectedIds.size} lead(s).`, { type: "success" });
-    setSelectedIds(new Set());
   };
 
   const handleMoveLead = (leadId: string, newStatusId: string) => {
-    setLeads((prev) =>
-      prev.map((lead) => {
-        if (lead.id !== leadId) return lead;
-        logStageChangeActivity(lead, newStatusId);
-        return { ...lead, statusId: newStatusId, updatedAt: nowIso() };
+    dispatch(
+      reqToChangeLeadStage({
+        data: { id: leadId, status_id: newStatusId },
+        onSuccess: refreshLeads,
+        onFailure: () => notify("Couldn't move lead. Please try again.", { type: "error" }),
       }),
     );
   };
@@ -240,23 +280,52 @@ export default function LeadsPage() {
     leadId: string,
     values: { activityType: LeadActivityType; subject: string; description?: string },
   ) => {
-    setActivities((prev) => [
-      ...prev,
-      { id: nextId("a"), leadId, createdBy: DEMO_OWNERS[0].id, createdAt: nowIso(), ...values },
-    ]);
+    dispatch(
+      reqToAddLeadActivity({
+        data: {
+          id: leadId,
+          activity_type: values.activityType,
+          subject: values.subject,
+          description: values.description,
+        },
+        onSuccess: () => dispatch(reqToGetLeadActivities({ data: { id: leadId, limit: 100 } })),
+        onFailure: () => notify("Couldn't log activity. Please try again.", { type: "error" }),
+      }),
+    );
   };
 
   const handleAddNote = (leadId: string, note: string) => {
-    const now = nowIso();
-    setNotes((prev) => [...prev, { id: nextId("n"), leadId, note, createdBy: DEMO_OWNERS[0].id, createdAt: now, updatedAt: now }]);
+    dispatch(
+      reqToCreateLeadNote({
+        data: { id: leadId, note },
+        onSuccess: () => dispatch(reqToGetLeadNotes({ data: { id: leadId } })),
+        onFailure: () => notify("Couldn't add note. Please try again.", { type: "error" }),
+      }),
+    );
   };
 
   const handleUpdateNote = (noteId: string, note: string) => {
-    setNotes((prev) => prev.map((n) => (n.id === noteId ? { ...n, note, updatedAt: nowIso() } : n)));
+    dispatch(
+      reqToUpdateLeadNote({
+        data: { noteId, note },
+        onSuccess: () => {
+          if (detailLeadId) dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
+        },
+        onFailure: () => notify("Couldn't update note. Please try again.", { type: "error" }),
+      }),
+    );
   };
 
   const handleDeleteNote = (noteId: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    dispatch(
+      reqToDeleteLeadNote({
+        data: { noteId },
+        onSuccess: () => {
+          if (detailLeadId) dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
+        },
+        onFailure: () => notify("Couldn't delete note. Please try again.", { type: "error" }),
+      }),
+    );
   };
 
   const columns: DataTableColumn<Lead>[] = [
@@ -301,9 +370,9 @@ export default function LeadsPage() {
       key: "statusId",
       header: "Stage",
       sortable: true,
-      accessor: (row) => DEMO_LEAD_STATUSES.find((s) => s.id === row.statusId)?.name ?? "",
+      accessor: (row) => statuses.find((s) => s.id === row.statusId)?.name ?? "",
       render: (row) => {
-        const stage = DEMO_LEAD_STATUSES.find((s) => s.id === row.statusId);
+        const stage = statuses.find((s) => s.id === row.statusId);
         return stage ? (
           <Badge variant="outline" style={{ borderColor: stage.color, color: stage.color }}>
             {stage.name}
@@ -315,9 +384,9 @@ export default function LeadsPage() {
       key: "assignedTo",
       header: "Owner",
       sortable: true,
-      accessor: (row) => (row.assignedTo ? ownerName(row.assignedTo) : ""),
+      accessor: (row) => (row.assignedTo ? resolveOwnerName(owners, row.assignedTo) : ""),
       render: (row) =>
-        row.assignedTo ? ownerName(row.assignedTo) : <span className="text-muted-foreground">Unassigned</span>,
+        row.assignedTo ? resolveOwnerName(owners, row.assignedTo) : <span className="text-muted-foreground">Unassigned</span>,
     },
     {
       key: "priority",
@@ -368,33 +437,33 @@ export default function LeadsPage() {
           <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
             Edit
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm">
-                Delete
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete {row.fullName}?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes the lead from your pipeline. This can&apos;t be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => handleDelete(row.id)}>Delete</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {isAdmin && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {row.fullName}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes the lead from your pipeline. This can&apos;t be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleDelete(row.id)}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       ),
     },
   ];
 
   const detailLead = leads.find((l) => l.id === detailLeadId) ?? null;
-  const detailActivities = activities.filter((a) => a.leadId === detailLeadId);
-  const detailNotes = notes.filter((n) => n.leadId === detailLeadId);
 
   return (
     <div className="space-y-6">
@@ -407,6 +476,8 @@ export default function LeadsPage() {
         <LeadFormDialog
           mode={formMode}
           initialLead={editLead ?? undefined}
+          statuses={statuses}
+          owners={owners}
           open={formOpen}
           onOpenChange={setFormOpen}
           onSubmit={handleFormSubmit}
@@ -439,7 +510,7 @@ export default function LeadsPage() {
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Stages</SelectItem>
-              {DEMO_LEAD_STATUSES.map((s) => (
+              {statuses.map((s) => (
                 <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
             </SelectContent>
@@ -449,7 +520,7 @@ export default function LeadsPage() {
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Owners</SelectItem>
-              {DEMO_OWNERS.map((o) => (
+              {owners.map((o) => (
                 <SelectItem key={o.id} value={o.id}>{o.fullName}</SelectItem>
               ))}
             </SelectContent>
@@ -478,14 +549,14 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {selectedIds.size > 0 && view === "list" && (
+      {selectedIds.size > 0 && view === "list" && isAdmin && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
           <span className="text-sm font-medium">{selectedIds.size} selected</span>
 
           <Select onValueChange={handleBulkStageChange}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Change stage" /></SelectTrigger>
             <SelectContent>
-              {DEMO_LEAD_STATUSES.map((s) => (
+              {statuses.map((s) => (
                 <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
               ))}
             </SelectContent>
@@ -494,7 +565,7 @@ export default function LeadsPage() {
           <Select onValueChange={handleBulkAssign}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Assign to" /></SelectTrigger>
             <SelectContent>
-              {DEMO_OWNERS.map((o) => (
+              {owners.map((o) => (
                 <SelectItem key={o.id} value={o.id}>{o.fullName}</SelectItem>
               ))}
             </SelectContent>
@@ -527,20 +598,28 @@ export default function LeadsPage() {
           columns={columns}
           data={filteredLeads}
           getRowId={(row) => row.id}
-          emptyMessage="No leads match your filters."
+          emptyMessage={isLoading ? "Loading..." : "No leads match your filters."}
         />
       )}
 
       {view === "kanban" && (
-        <KanbanBoard leads={filteredLeads} onOpen={setDetailLeadId} onMoveLead={handleMoveLead} />
+        <KanbanBoard
+          leads={filteredLeads}
+          statuses={statuses}
+          owners={owners}
+          onOpen={setDetailLeadId}
+          onMoveLead={handleMoveLead}
+        />
       )}
 
-      {view === "analytics" && <LeadAnalytics leads={leads} />}
+      {view === "analytics" && <LeadAnalytics leads={leads} statuses={statuses} />}
 
       <LeadDetailSheet
         lead={detailLead}
-        activities={detailActivities}
-        notes={detailNotes}
+        activities={activities}
+        notes={notes}
+        statuses={statuses}
+        owners={owners}
         open={!!detailLeadId}
         onOpenChange={(open) => !open && setDetailLeadId(null)}
         onEdit={(lead) => {
