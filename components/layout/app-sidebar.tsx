@@ -8,8 +8,10 @@ import {
   ChevronRight,
   LayoutDashboard,
   Megaphone,
+  Moon,
   Rocket,
   SquareCheck,
+  Sun,
   TrendingUp,
   UserPlus,
   Users,
@@ -18,11 +20,14 @@ import {
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import { buildOrgRoute, pageRoutes, SITE_NAME } from "@/lib/constants";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Switch } from "@/components/ui/switch";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -164,8 +169,38 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
+      <SidebarFooter>
+        <SidebarMenu>
+          <ThemeToggle />
+        </SidebarMenu>
+      </SidebarFooter>
+
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === "dark";
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={isDark ? "Switch to light mode" : "Switch to dark mode"}
+        onClick={toggleTheme}
+      >
+        {isDark ? <Moon /> : <Sun />}
+        <span>{isDark ? "Dark mode" : "Light mode"}</span>
+        <Switch
+          checked={isDark}
+          onCheckedChange={toggleTheme}
+          tabIndex={-1}
+          aria-hidden="true"
+          className="ml-auto pointer-events-none group-data-[collapsible=icon]:hidden"
+        />
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 

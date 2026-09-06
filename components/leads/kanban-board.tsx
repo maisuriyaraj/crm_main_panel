@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -71,7 +71,16 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: KanbanBoardProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  // dnd-kit auto-scrolls every scrollable ancestor by default, which drags the
+  // whole page around. Restrict it to the board so only the columns scroll.
+  // Memoized because the auto-scroller re-reads these options on every frame.
+  const autoScroll = useMemo(
+    () => ({ canScroll: (element: Element) => element === boardRef.current }),
+    [],
+  );
 
   const stages = [...statuses].sort((a, b) => a.sortOrder - b.sortOrder);
 
@@ -93,29 +102,38 @@ export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: Kan
     }
   };
 
-  return (
-    <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <div className="flex gap-3 overflow-x-auto pb-4">
-        {stages.map((stage) => (
-          <KanbanColumn
-            key={stage.id}
-            stageId={stage.id}
-            name={stage.name}
-            color={stage.color}
-            leads={leads.filter((lead) => lead.statusId === stage.id)}
-            owners={owners}
-            onOpen={onOpen}
-          />
-        ))}
-      </div>
+  const handleDragCancel = () => setActiveLead(null);
 
-      <DragOverlay>
-        {activeLead ? (
-          <div className="w-72">
-            <KanbanCard lead={activeLead} owners={owners} onOpen={() => {}} />
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+  return (
+      <DndContext
+        sensors={sensors}
+        autoScroll={autoScroll}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
+        <div ref={boardRef} className="flex gap-3 overflow-x-auto pb-4">
+          {stages.map((stage) => (
+            <KanbanColumn
+              key={stage.id}
+              stageId={stage.id}
+              name={stage.name}
+              color={stage.color}
+              leads={leads.filter((lead) => lead.statusId === stage.id)}
+              owners={owners}
+              onOpen={onOpen}
+            />
+          ))}
+          <div aria-hidden className="w-4 shrink-0" />
+        </div>
+
+        <DragOverlay>
+          {activeLead ? (
+            <div className="w-72">
+              <KanbanCard lead={activeLead} owners={owners} onOpen={() => { }} dragOverlay />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
   );
 }

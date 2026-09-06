@@ -1,9 +1,18 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { Toaster } from 'sonner';
 
 import "./globals.css";
 import StoreProvider from "@/lib/store/StoreProvider";
+
+const THEME_INIT_SCRIPT = `
+  try {
+    var theme = localStorage.getItem("theme");
+    if (theme === "dark") document.documentElement.classList.add("dark");
+    else if (theme === "light") document.documentElement.classList.add("light");
+  } catch (e) {}
+`;
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +41,9 @@ export default function RootLayout({
     >
       <StoreProvider>
         <body className="min-h-full flex flex-col">
+          <Script id="theme-init" strategy="beforeInteractive">
+            {THEME_INIT_SCRIPT}
+          </Script>
           {children}
           <Toaster richColors position="top-right" />
         </body>

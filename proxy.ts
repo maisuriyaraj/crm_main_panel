@@ -7,11 +7,6 @@ const publicRoutes = [
     pageRoutes.signup,
 ];
 
-const protectedRoutes = [
-    pageRoutes.dashboard,
-    pageRoutes.settingsTeam,
-];
-
 function isPublicRoute(pathname: string) {
     return publicRoutes.some(
         (route) =>
@@ -39,23 +34,20 @@ function getOrganizationId(request: NextRequest) {
 function isProtectedRoute(pathname: string) {
     const segments = pathname.split("/").filter(Boolean);
 
-    if (segments.length < 2) {
+    // Every /{organizationId}/* screen is a protected app route by default,
+    // so a newly added module page can't ship without route-level protection.
+    // Non-org paths ("/", "/auth/*") are handled by isPublicRoute instead.
+    if (segments.length < 1 || segments[0] === "auth") {
         return false;
     }
 
-    const routeAfterOrg = `/${segments.slice(1).join("/")}`;
-
-    return protectedRoutes.some(
-        (route) =>
-            routeAfterOrg === route ||
-            routeAfterOrg.startsWith(`${route}/`),
-    );
+    return true;
 }
 
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    const accessToken = request.cookies.get("accessToken")?.value;
+    const accessToken = request.cookies.get("token")?.value;
     const isAuthenticated = Boolean(accessToken);
 
     // Authenticated user should not access auth/public pages
@@ -99,9 +91,11 @@ export function proxy(request: NextRequest) {
 
 export const config = {
     matcher: [
-        "/",
-        "/auth/:path*",
-        "/:organization_id/dashboard/:path*",
-        "/:organization_id/settings/:path*",
+        // Runs on every route except Next's own static/internal assets and
+        // metadata files — without this exclusion, a pattern broad enough to
+        // cover every /{organizationId}/* screen also matches paths like
+        // /_next/static/css/*.css (its first segment looks like an org id),
+        // which then get redirected instead of served.
+        "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
     ],
 };

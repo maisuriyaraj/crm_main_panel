@@ -337,7 +337,8 @@ export default function LeadsPage() {
           onCheckedChange={(checked) =>
             setSelectedIds(checked ? new Set(filteredLeads.map((l) => l.id)) : new Set())
           }
-          aria-label="Select all"
+          aria-label={`Select all ${filteredLeads.length} leads matching the current filters`}
+          title={`Selects all ${filteredLeads.length} leads matching the current filters, not just this page`}
         />
       ),
       render: (row) => (
@@ -551,7 +552,9 @@ export default function LeadsPage() {
 
       {selectedIds.size > 0 && view === "list" && isAdmin && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
-          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <span className="text-sm font-medium">
+            {selectedIds.size} selected{selectedIds.size === filteredLeads.length ? " (all filtered leads)" : ""}
+          </span>
 
           <Select onValueChange={handleBulkStageChange}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Change stage" /></SelectTrigger>
@@ -578,7 +581,11 @@ export default function LeadsPage() {
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete {selectedIds.size} lead(s)?</AlertDialogTitle>
-                <AlertDialogDescription>This can&apos;t be undone.</AlertDialogDescription>
+                <AlertDialogDescription>
+                  {selectedIds.size === filteredLeads.length
+                    ? "This includes every lead matching your current filters, not just the ones visible on this page. This can't be undone."
+                    : "This can't be undone."}
+                </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -598,7 +605,8 @@ export default function LeadsPage() {
           columns={columns}
           data={filteredLeads}
           getRowId={(row) => row.id}
-          emptyMessage={isLoading ? "Loading..." : "No leads match your filters."}
+          isLoading={isLoading}
+          emptyMessage="No leads match your filters."
         />
       )}
 

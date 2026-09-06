@@ -2,7 +2,7 @@ import { toast } from "sonner";
 
 export const notify = (message: string, options?: { type?: "success" | "error" | "info" }) => {
     const { type = "info" } = options || {};
-    toast(message, { type });
+    toast[type](message);
 }
 
 export const handleLocalStorageActions = (action: "set" | "get" | "remove", key: string, value?: any) => {
@@ -39,7 +39,10 @@ export const handleCookieActions = (action: "set" | "get" | "remove", key: strin
             }
             return null;
         case "remove":
-            document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+            // Must repeat the path the cookie was written with — a delete that
+            // omits it only clears a cookie scoped to the current path, so a
+            // "path=/" cookie would survive and keep the session looking alive.
+            document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=${options?.path ?? "/"}`;
             break;
         default:
             break;

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToGetPricingPlans } from "@/lib/store/slices/pricingPlansSlice";
+import { notify } from "@/lib/commonFunctions";
 
 const features = [
   { icon: Users, title: "CRM Management", tone: "text-primary bg-primary/10", items: ["Lead Management", "Contact Management", "Activity Tracking", "Notes & Attachments"] },
@@ -127,6 +128,39 @@ const navLinks = ["Features", "Solutions", "How it works", "Pricing", "FAQ"];
 const footerProduct = ["Features", "Pricing", "Integrations", "Documentation"];
 const footerCompany = ["About RJ Industries", "Contact", "Careers", "Partners"];
 const footerLegal = ["Privacy Policy", "Terms", "Security"];
+
+// Only labels with a real destination get an href; everything else is an
+// honest "coming soon" notice instead of a misleading anchor/mailto link.
+const footerLinkHref: Record<string, string> = {
+  Features: "#features",
+  Pricing: "#pricing",
+  Contact: "mailto:hello@orbitops.io",
+};
+
+function FooterLink({ label }: { label: string }) {
+  const href = footerLinkHref[label];
+
+  if (href) {
+    return (
+      <a href={href} className="mt-3 block text-sm text-muted-foreground hover:text-foreground">
+        {label}
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href="#"
+      onClick={(event) => {
+        event.preventDefault();
+        notify(`${label} is coming soon.`, { type: "info" });
+      }}
+      className="mt-3 block text-sm text-muted-foreground hover:text-foreground"
+    >
+      {label}
+    </a>
+  );
+}
 
 const trustedBrands = ["NORTHSTAR", "VERTEX", "APERTURE", "MONOLITH", "SUMMIT"];
 
@@ -488,15 +522,15 @@ export default function Home() {
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider">Product</p>
-            {footerProduct.map(x => <a href="#features" className="mt-3 block text-sm text-muted-foreground hover:text-foreground" key={x}>{x}</a>)}
+            {footerProduct.map(x => <FooterLink label={x} key={x} />)}
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider">Company</p>
-            {footerCompany.map(x => <a href="mailto:hello@orbitops.io" className="mt-3 block text-sm text-muted-foreground hover:text-foreground" key={x}>{x}</a>)}
+            {footerCompany.map(x => <FooterLink label={x} key={x} />)}
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-wider">Legal</p>
-            {footerLegal.map(x => <a href="#top" className="mt-3 block text-sm text-muted-foreground hover:text-foreground" key={x}>{x}</a>)}
+            {footerLegal.map(x => <FooterLink label={x} key={x} />)}
           </div>
         </div>
       </div>

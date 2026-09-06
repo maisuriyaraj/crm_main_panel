@@ -1,7 +1,6 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { CSS } from "@dnd-kit/utilities";
 
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -27,27 +26,24 @@ interface KanbanCardProps {
   lead: Lead;
   owners: LeadOwner[];
   onOpen: (leadId: string) => void;
+  dragOverlay?: boolean;
 }
 
-export function KanbanCard({ lead, owners, onOpen }: KanbanCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+export function KanbanCard({ lead, owners, onOpen, dragOverlay }: KanbanCardProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: lead.id,
+    disabled: dragOverlay,
   });
-
-  const style = transform
-    ? { transform: CSS.Translate.toString(transform), zIndex: isDragging ? 10 : undefined }
-    : undefined;
 
   return (
     <Card
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
+      ref={dragOverlay ? undefined : setNodeRef}
+      {...(dragOverlay ? {} : listeners)}
+      {...(dragOverlay ? {} : attributes)}
       onClick={() => onOpen(lead.id)}
       className={cn(
-        "cursor-grab touch-none py-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
-        isDragging && "opacity-50",
+        "cursor-grab py-3 shadow-sm transition-shadow hover:shadow-md active:cursor-grabbing",
+        isDragging && !dragOverlay && "touch-none opacity-0",
       )}
     >
       <CardContent className="space-y-2 px-3">

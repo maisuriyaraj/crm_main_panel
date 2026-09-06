@@ -21,5 +21,5 @@ export const FALLBACK_LEAD_STATUSES: LeadStage[] = [
 ];
 
 export const FALLBACK_OWNERS: LeadOwner[] = [
-  { id: 1, fullName: "Unassigned Pool" },
+  { id: "fallback-owner", fullName: "Unassigned Pool" },
 ];

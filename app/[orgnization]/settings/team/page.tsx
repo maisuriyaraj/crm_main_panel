@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 
-import { pageRoutes } from "@/lib/constants";
+import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   OrgUser,
@@ -34,18 +34,21 @@ import {
 export default function TeamSettingsPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const params = useParams<{ orgnization: string }>();
   const { role } = useAuth();
   const { users, isLoading } = useAppSelector((state) => state.orgUsers);
 
   useEffect(() => {
     if (role && role !== "org_admin") {
-      // router.replace(pageRoutes.dashboard);
+      router.replace(buildOrgRoute(params?.orgnization ?? "", pageRoutes.dashboard));
     }
-  }, [role, router]);
+  }, [role, router, params]);
 
   useEffect(() => {
-    dispatch(reqToGetOrgUsers({ data: null }));
-  }, [dispatch]);
+    if (role === "org_admin") {
+      dispatch(reqToGetOrgUsers({ data: null }));
+    }
+  }, [dispatch, role]);
 
   if (role !== "org_admin") {
     return null;
@@ -174,7 +177,8 @@ export default function TeamSettingsPage() {
         getRowId={(row) => row.id}
         searchKeys={["fullName", "email"]}
         searchPlaceholder="Search team members..."
-        emptyMessage={isLoading ? "Loading..." : "No team members yet."}
+        isLoading={isLoading}
+        emptyMessage="No team members yet."
       />
     </div>
   );

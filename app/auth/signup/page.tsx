@@ -65,37 +65,34 @@ const BookDemoSchema = Yup.object().shape({
 
 export default function BookDemo() {
     const dispatch = useAppDispatch();
-    const handleSubmit = async (
+    const handleSubmit = (
         values: BookDemoValues,
         { setSubmitting, resetForm }: { setSubmitting: (v: boolean) => void; resetForm: () => void }
     ) => {
-        try {
-            console.log(values)
-            const reqObj = {
-                "full_name": values.fullName,
-                "email": values.businessEmail,
-                "mobile": values.phoneNumber,
-                "organization_name": values.businessName,
-                "organization_type": "asdasdsd",
-                "team_members_count": values.teamSize,
-                "scheduled_at":  values.preferredDate,
-                "meeting_type": "virtual",
-                "invite_emails": [],
-                "business_requirements": values.message
-            }
-
-            console.log("reqObj =>> ",reqObj)
-            dispatch(reqToBookADemo({ data: reqObj, onSuccess: () => { 
-                notify("Demo booked successfully! We'll reach out to you soon.", { type: "success" });
-             }, onFailure: () => { 
-                notify("Failed to book demo. Please try again later.", { type: "error" });
-              } }));
-            resetForm();
-        } catch (error) {
-            console.error("Failed to book demo:", error);
-        } finally {
-            setSubmitting(false);
+        const reqObj = {
+            "full_name": values.fullName,
+            "email": values.businessEmail,
+            "mobile": values.phoneNumber,
+            "organization_name": values.businessName,
+            "team_members_count": values.teamSize,
+            "scheduled_at": values.preferredDate,
+            "meeting_type": "virtual",
+            "invite_emails": [],
+            "business_requirements": values.message
         }
+
+        dispatch(reqToBookADemo({
+            data: reqObj,
+            onSuccess: () => {
+                notify("Demo booked successfully! We'll reach out to you soon.", { type: "success" });
+                resetForm();
+                setSubmitting(false);
+            },
+            onFailure: () => {
+                notify("Failed to book demo. Please try again later.", { type: "error" });
+                setSubmitting(false);
+            },
+        }));
     };
 
     return (

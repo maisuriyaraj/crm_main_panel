@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Mail, Lock, ArrowRight } from "lucide-react";
-import { pageRoutes } from "@/lib/constants";
+import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToLogin } from "@/lib/store/slices/authSlice";
 import { handleCookieActions, handleLocalStorageActions, notify } from "@/lib/commonFunctions";
@@ -17,6 +18,7 @@ import {
   FormItem,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 
 const signInSchema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
@@ -26,8 +28,17 @@ const signInSchema = z.object({
 type SignInValues = z.infer<typeof signInSchema>;
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const dispatch = useAppDispatch();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const form = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -45,8 +56,23 @@ export default function LoginPage() {
               onSuccess: (me: { data: any }) => {
                 handleLocalStorageActions("set", "user", me.data);
                 handleCookieActions("set", "user", me.data, { expires: 3600 });
+
+                if (me?.data?.mustResetPassword) {
+                  router.replace(pageRoutes.resetPassword);
+                  return;
+                }
+
+                const orgId = String(me?.data?.organizationId);
+                const redirect = searchParams.get("redirect");
+                // Only honor same-origin, org-scoped redirects — never let an
+                // arbitrary "redirect" query param send the user off-app.
+                const isSafeRedirect =
+                  redirect &&
+                  redirect.startsWith(`/${orgId}/`) &&
+                  !redirect.startsWith("//");
+
                 router.replace(
-                  me?.data?.mustResetPassword ? pageRoutes.resetPassword : `/${me?.data?.organizationId}/${pageRoutes.dashboard}`,
+                  isSafeRedirect ? redirect : buildOrgRoute(orgId, pageRoutes.dashboard),
                 );
               },
               onFailure: () => {
@@ -161,10 +187,10 @@ export default function LoginPage() {
                         <div className="relative">
                           <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
 
-                          <input
+                          <Input
                             type="email"
                             placeholder="name@company.com"
-                            className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 outline-none"
+                            className="h-auto rounded-xl border-border bg-background pl-10 pr-4 py-3 text-base"
                             {...field}
                           />
                         </div>
@@ -187,10 +213,10 @@ export default function LoginPage() {
                         <div className="relative">
                           <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
 
-                          <input
+                          <Input
                             type="password"
                             placeholder="••••••••"
-                            className="w-full rounded-xl border border-border bg-background pl-10 pr-4 py-3 outline-none"
+                            className="h-auto rounded-xl border-border bg-background pl-10 pr-4 py-3 text-base"
                             {...field}
                           />
                         </div>

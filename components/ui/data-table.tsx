@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -38,6 +39,7 @@ interface DataTableProps<T> {
   searchKeys?: (keyof T)[];
   pageSize?: number;
   emptyMessage?: string;
+  isLoading?: boolean;
 }
 
 export function DataTable<T>({
@@ -48,6 +50,7 @@ export function DataTable<T>({
   searchKeys = [],
   pageSize = 10,
   emptyMessage = "No results found.",
+  isLoading = false,
 }: DataTableProps<T>) {
   const [search, setSearch] = React.useState("");
   const [sortKey, setSortKey] = React.useState<string | null>(null);
@@ -150,7 +153,17 @@ export function DataTable<T>({
           </TableHeader>
 
           <TableBody>
-            {paged.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: pageSize }, (_, i) => (
+                <TableRow key={`skeleton-${i}`}>
+                  {columns.map((column) => (
+                    <TableCell key={column.key}>
+                      <Skeleton className="h-4 w-full max-w-40" />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : paged.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
                   {emptyMessage}

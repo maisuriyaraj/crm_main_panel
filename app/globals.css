@@ -152,7 +152,7 @@
   --shadow-panel: 0 30px 80px -32px oklch(0.04 0.02 135 / 70%);
 }
 
-/* Dark mode is opt-in via .dark class; remove this block to prevent auto dark mode from OS preference
+/* Dark mode is opt-in via .dark class; this block also honors OS-level dark preference when no .light/.dark class is set */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
     --background: oklch(0.14 0.035 135);
@@ -173,7 +173,6 @@
     --glass: oklch(0.2 0.04 135 / 70%);
   }
 }
-*/
 
 @layer base {
   * {

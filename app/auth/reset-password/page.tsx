@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Lock } from "lucide-react";
 
-import { pageRoutes } from "@/lib/constants";
+import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToResetPassword } from "@/lib/store/slices/authSlice";
 import { useAuth } from "@/hooks/useAuth";
@@ -72,7 +72,7 @@ export default function ResetPasswordPage() {
             reqToFetchMe({
               data: null,
               onSuccess: (me: { data:any }) => {
-                router.replace(`/${me?.data?.organizationId}/${pageRoutes.dashboard}`);
+                router.replace(buildOrgRoute(String(me?.data?.organizationId), pageRoutes.dashboard));
               },
               onFailure: () => {
                 notify("Password updated. Please sign in again.", { type: "info" });
