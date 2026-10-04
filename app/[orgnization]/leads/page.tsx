@@ -80,7 +80,7 @@ export default function LeadsPage() {
   const view = (searchParams.get("view") as ViewMode) || "list";
 
   const { role } = useAuth();
-  const isAdmin = role === "org_admin";
+  const isAdmin = role === "Admin";
 
   const { leads, isLoading } = useAppSelector((state) => state.leads);
   const apiStatuses = useAppSelector((state) => state.leads.statuses);

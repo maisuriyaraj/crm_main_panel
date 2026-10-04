@@ -109,7 +109,7 @@ All consumed from the fixed backend contract (not designed here):
 - `proxy.ts` can only check cookie *presence*, not decode role or expiry (no shared secret) — an expired-but-present cookie still passes the optimistic check and falls through to the real guard/refresh flow, which is expected but worth confirming in testing.
 
 ## Open Questions
-- Should `org_user` accounts see a simplified nav vs. `org_admin`'s full nav, or is it identical minus the `/settings/team` entry for v1? *(carried over from requirements — unresolved; implemented as identical minus `/settings/team` for now)*
+- Should `org_user` accounts see a simplified nav vs. `Admin`'s full nav, or is it identical minus the `/settings/team` entry for v1? *(carried over from requirements — unresolved; implemented as identical minus `/settings/team` for now)*
 - Is react-hook-form + zod an acceptable substitute for the requirement doc's literal "Formik + Zod" wording, given `.claude/rules/component-structure.md`'s guidance for brand-new forms? *(implemented as RHF+zod, approved with the spec)*
 - OK to reuse `/auth/signin` as the login page instead of introducing a separate `/login` route? *(implemented this way, approved with the spec)*
 - OK to build a new lightweight `components/ui/data-table.tsx` from scratch, since no `OrbitOpsDataTable` exists in the codebase today? *(implemented this way, approved with the spec)*

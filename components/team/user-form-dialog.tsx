@@ -34,11 +34,11 @@ import {
 const createUserSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
-  role: z.enum(["org_admin", "org_user"]),
+  role: z.enum(["Admin", "org_user"]),
 });
 
 const editUserSchema = z.object({
-  role: z.enum(["org_admin", "org_user"]),
+  role: z.enum(["Admin", "org_user"]),
   status: z.enum(["active", "disabled"]),
 });
 
@@ -151,7 +151,7 @@ export function UserFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="org_user">Org User</SelectItem>
-                        <SelectItem value="org_admin">Org Admin</SelectItem>
+                        <SelectItem value="Admin">Org Admin</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -183,7 +183,7 @@ export function UserFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="org_user">Org User</SelectItem>
-                        <SelectItem value="org_admin">Org Admin</SelectItem>
+                        <SelectItem value="Admin">Org Admin</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

@@ -39,18 +39,18 @@ export default function TeamSettingsPage() {
   const { users, isLoading } = useAppSelector((state) => state.orgUsers);
 
   useEffect(() => {
-    if (role && role !== "org_admin") {
+    if (role && role !== "Admin") {
       router.replace(buildOrgRoute(params?.orgnization ?? "", pageRoutes.dashboard));
     }
   }, [role, router, params]);
 
   useEffect(() => {
-    if (role === "org_admin") {
+    if (role === "Admin") {
       dispatch(reqToGetOrgUsers({ data: null }));
     }
   }, [dispatch, role]);
 
-  if (role !== "org_admin") {
+  if (role !== "Admin") {
     return null;
   }
 

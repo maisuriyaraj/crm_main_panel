@@ -97,7 +97,7 @@ const navGroups: NavGroupConfig[] = [
   },
   {
     label: "Organization",
-    roles: ["org_admin"],
+    roles: ["Admin"],
     items: [{ label: "Team", icon: UsersRound, href: pageRoutes.settingsTeam }],
   },
 ];

@@ -60,7 +60,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 export default function ContactsPage() {
   const dispatch = useAppDispatch();
   const { user, role } = useAuth();
-  const isAdmin = role === "org_admin";
+  const isAdmin = role === "Admin";
   const currentUserId = user?.id ? String(user.id) : undefined;
 
   const { contacts, pagination, isLoading, activeContactNotes, notesLoading } = useAppSelector(

@@ -12,7 +12,7 @@
 | `/{orgSlug}/contacts` | `main-panel/app/[orgnization]/contacts/page.tsx` | any authenticated org user; admin-only controls gated in-page |
 | `/{orgSlug}/leads` | `main-panel/app/[orgnization]/leads/page.tsx` | any authenticated org user; admin-only controls gated in-page |
 | `/{orgSlug}/dashboard` | `main-panel/app/[orgnization]/dashboard/page.tsx` | any authenticated org user |
-| `/{orgSlug}/settings/team` | `main-panel/app/[orgnization]/settings/team/page.tsx` | nav group restricted to `org_admin` (`main-panel/components/layout/app-sidebar.tsx:100`) |
+| `/{orgSlug}/settings/team` | `main-panel/app/[orgnization]/settings/team/page.tsx` | nav group restricted to `Admin` (`main-panel/components/layout/app-sidebar.tsx:100`) |
 
 The org segment directory is spelled **`[orgnization]`** — missing the second `a`. That is the
 real directory name and the real param name. See `07-gotchas.md` #10.
@@ -51,7 +51,7 @@ in the browser (`07-gotchas.md` #11).
 | Bulk delete / reassign | `reqToBulkDeleteContacts`, `reqToBulkUpdateContacts` | `isAdmin` — bulk bar hidden |
 | Add / edit / delete note | `reqToCreateContactNote`, `reqToUpdateContactNote`, `reqToDeleteContactNote` | note controls shown only to the author or an admin |
 
-Admin detection is `role === "org_admin"` from `useAuth`, matching the Leads screen. Row
+Admin detection is `role === "Admin"` from `useAuth`, matching the Leads screen. Row
 selection is page-scoped and clears whenever the visible rows change.
 
 ### Empty states
@@ -157,7 +157,7 @@ notes.
 | Add activity | `reqToAddLeadActivity` | `POST /api/leads/:id/activities` | no |
 | Add / edit / delete note | `reqToCreateLeadNote`, `reqToUpdateLeadNote`, `reqToDeleteLeadNote` | `/api/leads/notes` paths | no |
 
-Admin detection is `role === "org_admin"`
+Admin detection is `role === "Admin"`
 (`main-panel/app/[orgnization]/leads/page.tsx:81-82`), from the `useAuth` hook. Non-admins get
 **hidden controls**, not disabled ones — the bulk action bar and delete control are not
 rendered at all. The server independently rejects these calls (`03-business-rules.md` R-24), so

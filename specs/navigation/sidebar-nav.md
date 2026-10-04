@@ -28,7 +28,7 @@ Give the User Panel (the logged-in area under `app/[orgnization]/`) a real sideb
   - This primitive is otherwise unused anywhere in the app right now (confirmed by search) — this spec is its first real usage.
 - Design tokens for the sidebar (`--sidebar`, `--sidebar-foreground`, `--sidebar-primary(-foreground)`, `--sidebar-accent(-foreground)`, `--sidebar-border`, `--sidebar-ring`) already exist in both light and dark themes in `app/globals.css` and are already mapped in the `@theme inline` block. No new tokens needed.
 - `hooks/useAuth.ts` exposes `{ user, role, isAuthenticated, isAuthChecked, isLoading, needResetPassword, logout }`. `user.organizationId` and `user.role` are what this spec needs.
-- Role model, confirmed from the existing (uncommitted) `settings/team/page.tsx`: `role` is a plain `string` on `AuthUser`, and the only two values referenced anywhere in the codebase are `"org_admin"` and `"org_user"`. There is no formal role enum/union type today — this spec does not invent one, it matches the existing string-comparison pattern (`role !== "org_admin"`).
+- Role model, confirmed from the existing (uncommitted) `settings/team/page.tsx`: `role` is a plain `string` on `AuthUser`, and the only two values referenced anywhere in the codebase are `"Admin"` and `"org_user"`. There is no formal role enum/union type today — this spec does not invent one, it matches the existing string-comparison pattern (`role !== "Admin"`).
 - **No `OrbitOps*` component naming convention exists anywhere in this codebase.** A repo-wide search for `OrbitOps[A-Z]\w*` found zero matches. `specs/auth/auth-flow.md` independently confirmed the same for `OrbitOpsDataTable` when it built `components/ui/data-table.tsx`. Existing non-`ui/` components use plain, purpose-based names grouped in feature folders (`components/team/user-form-dialog.tsx`). This spec follows that same existing pattern rather than introducing a new prefix — see Open Questions if you want it named `OrbitOpsSidebar` anyway.
 - `lucide-react` (^1.18.0) is already installed and is the icon set used everywhere else in the app (`app/page.tsx`, `components/ui/sidebar.tsx` itself). No new icon dependency is needed.
 - `lib/constants.ts`'s `pageRoutes` currently has flat, non-org-scoped values (`dashboard: "/dashboard"`, `settingsTeam: "/settings/team"`). This spec adds one small helper alongside them rather than changing their values, so nothing else that references them today breaks.
@@ -61,7 +61,7 @@ Growth
     - Account Center      -> real link, no page built yet
  - Growth                -> real link, no page built yet
 
-Organization  (only rendered if role === "org_admin")
+Organization  (only rendered if role === "Admin")
  - Team                  -> real page today (app/[orgnization]/settings/team)
 ```
 
@@ -89,7 +89,7 @@ Organization  (only rendered if role === "org_admin")
   - This is flagged as an Open Question below in case you'd rather tie it to a real user-preference record later.
 
 ### 5. Role-based visibility
-- Only one gate exists today: the "Organization" group (containing "Team") renders only when `role === "org_admin"`, matching the exact check already used in `settings/team/page.tsx`. `org_user` sees "Workspace" and "Growth" in full, minus "Organization"/"Team".
+- Only one gate exists today: the "Organization" group (containing "Team") renders only when `role === "Admin"`, matching the exact check already used in `settings/team/page.tsx`. `org_user` sees "Workspace" and "Growth" in full, minus "Organization"/"Team".
 - This is UX-only, same caveat already on record in `specs/auth/auth-flow.md`: hiding the nav item doesn't stop direct navigation; the page itself (already does) and the backend remain the real enforcement.
 
 ### 6. Icon set and dependencies
