@@ -24,6 +24,7 @@ import {
   reqToUpdateLeadNote,
 } from "@/lib/store/slices/leadsSlice";
 import { reqToGetOrgUsers } from "@/lib/store/slices/orgUsersSlice";
+import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
 import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
 import { resolveOwnerName, type Lead, type LeadActivityType } from "@/lib/leads/types";
 import { FALLBACK_LEAD_STATUSES, FALLBACK_OWNERS } from "@/lib/leads/fallback-data";
@@ -324,6 +325,26 @@ export default function LeadsPage() {
           if (detailLeadId) dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
         },
         onFailure: () => notify("Couldn't delete note. Please try again.", { type: "error" }),
+      }),
+    );
+  };
+
+  // Conversion creates a contact and stamps the lead with its id. The lead stays
+  // in the pipeline, so the list is refreshed rather than the row removed.
+  const handleConvertLead = (lead: Lead) => {
+    dispatch(
+      reqToConvertLead({
+        data: { leadId: lead.id },
+        onSuccess: () => {
+          notify(`${lead.fullName} is now a contact.`, { type: "success" });
+          setDetailLeadId(null);
+          refreshLeads();
+        },
+        onFailure: (error: any) =>
+          notify(
+            error?.response?.data?.message ?? "Couldn't convert this lead. Please try again.",
+            { type: "error" },
+          ),
       }),
     );
   };
@@ -638,6 +659,7 @@ export default function LeadsPage() {
         onAddNote={handleAddNote}
         onUpdateNote={handleUpdateNote}
         onDeleteNote={handleDeleteNote}
+        onConvert={handleConvertLead}
       />
     </div>
   );

@@ -4,6 +4,7 @@ import publicAPisReducer from "./slices/publicAPisSlice";
 import authReducer from "./slices/authSlice";
 import orgUsersReducer from "./slices/orgUsersSlice";
 import leadsReducer from "./slices/leadsSlice";
+import contactsReducer from "./slices/contactsSlice";
 
 // Import additional slice reducers here as the project grows
 
@@ -14,6 +15,7 @@ export const store = configureStore({
     auth: authReducer,
     orgUsers: orgUsersReducer,
     leads: leadsReducer,
+    contacts: contactsReducer,
     // Add more reducers here as you create new slices
   },
 });

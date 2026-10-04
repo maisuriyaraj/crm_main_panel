@@ -37,6 +37,9 @@ export interface Lead {
   statusId: string;
   assignedTo?: string;
   tags: string[];
+  // Set once this lead has been converted into a contact. Undefined means it has
+  // not been; a lead can only be converted once.
+  convertedContactId?: string;
   createdAt: string;
   updatedAt: string;
 }

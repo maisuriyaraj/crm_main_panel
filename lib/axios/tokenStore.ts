@@ -18,13 +18,13 @@ export const clearAccessToken = () => {
     accessToken = null;
     if (typeof window !== "undefined") {
         localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
-        localStorage.removeItem("user");
+        // localStorage.removeItem("user");
 
         // proxy.ts decides "is this user signed in?" from these two cookies
         // alone. Leaving them behind after the session dies makes the server
         // bounce every signin visit back to the dashboard, while the client
         // guard bounces it straight back — an endless reload loop.
-        handleCookieActions("remove", "user");
+        // handleCookieActions("remove", "user");
         handleCookieActions("remove", "token");
     }
 };

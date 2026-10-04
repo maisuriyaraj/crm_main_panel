@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, UserCheck } from "lucide-react";
 
 import {
   resolveOwnerName,
@@ -48,6 +48,9 @@ interface LeadDetailSheetProps {
   onAddNote: (leadId: string, note: string) => void;
   onUpdateNote: (noteId: string, note: string) => void;
   onDeleteNote: (noteId: string) => void;
+  // Optional so the sheet still renders anywhere the caller has not wired
+  // conversion up. Hidden entirely when absent.
+  onConvert?: (lead: Lead) => void;
 }
 
 export function LeadDetailSheet({
@@ -63,6 +66,7 @@ export function LeadDetailSheet({
   onAddNote,
   onUpdateNote,
   onDeleteNote,
+  onConvert,
 }: LeadDetailSheetProps) {
   const [activityType, setActivityType] = useState<LeadActivityType>("call");
   const [activitySubject, setActivitySubject] = useState("");
@@ -141,9 +145,22 @@ export function LeadDetailSheet({
             </div>
           )}
 
-          <Button size="sm" variant="outline" onClick={() => onEdit(lead)}>
-            <Pencil className="h-3.5 w-3.5" /> Edit Lead
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={() => onEdit(lead)}>
+              <Pencil className="h-3.5 w-3.5" /> Edit Lead
+            </Button>
+
+            {onConvert &&
+              (lead.convertedContactId ? (
+                <Button size="sm" variant="ghost" disabled>
+                  <UserCheck className="h-3.5 w-3.5" /> Already a contact
+                </Button>
+              ) : (
+                <Button size="sm" variant="secondary" onClick={() => onConvert(lead)}>
+                  <UserCheck className="h-3.5 w-3.5" /> Convert to Contact
+                </Button>
+              ))}
+          </div>
 
           <Tabs defaultValue="activity">
             <TabsList className="w-full">

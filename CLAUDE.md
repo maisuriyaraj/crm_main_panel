@@ -75,3 +75,17 @@ Available commands:
 ## Communication
 
 Always respond in plain, simple English. Avoid technical jargon where possible. Keep responses short and clear unless the task genuinely needs detail.
+
+## Contacts module
+
+This panel's contacts reference doc is `docs/modules/contacts/05-frontend-main-panel.md`. The
+index and the rest of the doc set are in the backend repo at
+`backend/docs/modules/contacts/README.md`; change specs are in
+`backend/docs/modules/contacts/specs/`.
+
+**Read these before changing anything that touches contacts, and update them in the same PR as
+the change.**
+
+The Contacts screen filters and paginates server-side and maps API field errors onto form
+inputs. The Leads screen does neither. Contacts is the intended pattern — see
+`backend/docs/modules/contacts/07-gotchas.md` #19 before copying from Leads.

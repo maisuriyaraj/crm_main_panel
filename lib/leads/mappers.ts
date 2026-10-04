@@ -41,6 +41,7 @@ export const mapLeadFromApi = (raw: any): Lead => ({
   statusId: toStringId(raw.status_id) ?? "",
   assignedTo: toStringId(raw.assigned_to),
   tags: Array.isArray(raw.tags) ? raw.tags.map((tag: any) => tag.name) : [],
+  convertedContactId: toStringId(raw.converted_contact_id),
   createdAt: raw.created_at,
   updatedAt: raw.updated_at,
 });
