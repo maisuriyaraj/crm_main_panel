@@ -25,6 +25,10 @@ export const pageRoutes = {
 // own leading slash, so this must not add a second one between the two.
 export const buildOrgRoute = (orgSlug: string, route: string) => `/${orgSlug}${route}`;
 
+// NEXT_PUBLIC_ so it is inlined into the client bundle; falls back to the
+// local backend for development.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",
     bookDemo:"/user/bookings",
@@ -40,4 +44,4 @@ export const apiRoutes = {
     leadNotes: "/api/leads/notes",
     contacts: "/api/contacts",
     contactNotes: "/api/contacts/notes",
-}
+}

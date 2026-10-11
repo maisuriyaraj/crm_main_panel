@@ -1,32 +1,40 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { apiRoutes, pageRoutes } from "@/lib/constants";
-import { clearAccessToken, getAccessToken, setAccessToken } from "@/lib/axios/tokenStore";
+import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
+import { API_BASE_URL, apiRoutes } from "@/lib/constants";
+import { endSession, getSessionSignal, isSessionEnded } from "@/lib/auth/session";
 
+// Auth lives entirely in HttpOnly cookies set by the backend; the browser
+// attaches them via withCredentials, so no token is ever read or stored here.
 export const Axios = axios.create({
-    baseURL: "http://localhost:5000",
+    baseURL: API_BASE_URL,
     withCredentials: true,
 });
 
-Axios.interceptors.request.use((config) => {
-    const token = getAccessToken();
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-});
+// These never get a refresh-and-retry: login/logout don't take an access
+// token, and a failing refresh call must not refresh itself.
+const NO_REFRESH_ENDPOINTS: string[] = [apiRoutes.login, apiRoutes.refreshToken, apiRoutes.logout];
+
+// Only an expired or absent access token is worth a refresh. A forged or
+// wrong-scope token ("TOKEN_INVALID"), a 403 or a 400 is not.
+const REFRESHABLE_CODES = ["TOKEN_EXPIRED", "TOKEN_MISSING"];
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
-let refreshPromise: Promise<string> | null = null;
+Axios.interceptors.request.use((config) => {
+    if (isSessionEnded()) {
+        return Promise.reject(new axios.CanceledError("Session ended"));
+    }
+    config.signal ??= getSessionSignal();
+    return config;
+});
 
-const refreshAccessToken = () => {
+// Single-flight: however many requests 401 at once, they all wait on the
+// same refresh call instead of each rotating the refresh token.
+let refreshPromise: Promise<void> | null = null;
+
+const refreshSession = () => {
     if (!refreshPromise) {
         refreshPromise = Axios.post(apiRoutes.refreshToken)
-            .then((response) => {
-                const token = response.data?.accessToken;
-                setAccessToken(token);
-                return token;
-            })
+            .then(() => undefined)
             .finally(() => {
                 refreshPromise = null;
             });
@@ -36,15 +44,16 @@ const refreshAccessToken = () => {
 
 Axios.interceptors.response.use(
     (response) => response,
-    async (error: AxiosError) => {
+    async (error: AxiosError<{ code?: string }>) => {
         const originalRequest = error.config as RetriableConfig | undefined;
-        const isRefreshCall = originalRequest?.url === apiRoutes.refreshToken;
 
         if (
-            error.response?.status !== 401 ||
             !originalRequest ||
+            error.response?.status !== 401 ||
             originalRequest._retry ||
-            isRefreshCall
+            isSessionEnded() ||
+            NO_REFRESH_ENDPOINTS.includes(originalRequest.url ?? "") ||
+            !REFRESHABLE_CODES.includes(error.response.data?.code ?? "")
         ) {
             return Promise.reject(error);
         }
@@ -52,15 +61,18 @@ Axios.interceptors.response.use(
         originalRequest._retry = true;
 
         try {
-            const token = await refreshAccessToken();
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            return Axios(originalRequest);
+            await refreshSession();
         } catch (refreshError) {
-            clearAccessToken();
-            if (typeof window !== "undefined") {
-                window.location.href = pageRoutes.signin;
+            // Only a 401 from the refresh endpoint proves the session is over.
+            // Offline, timeouts and 5xx leave the session alone so a blip
+            // doesn't sign anyone out.
+            if (axios.isAxiosError(refreshError) && refreshError.response?.status === 401) {
+                void endSession();
             }
-            return Promise.reject(refreshError);
+            return Promise.reject(error);
         }
+
+        // The refresh response already replaced the cookies; replay once.
+        return Axios(originalRequest);
     },
 );

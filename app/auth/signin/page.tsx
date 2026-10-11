@@ -55,7 +55,10 @@ function LoginForm() {
               data: null,
               onSuccess: (me: { data: any }) => {
                 handleLocalStorageActions("set", "user", me.data);
-                handleCookieActions("set", "user", me.data, { expires: 3600 });
+                // Routing hint for proxy.ts only (which dashboard to send a
+                // signed-in visitor of /auth/signin to), never trusted for
+                // authorization. Lives as long as the refresh session.
+                handleCookieActions("set", "user", me.data, { expires: 30 * 24 * 60 * 60 });
 
                 if (me?.data?.mustResetPassword) {
                   router.replace(pageRoutes.resetPassword);

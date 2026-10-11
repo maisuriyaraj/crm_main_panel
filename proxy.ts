@@ -7,8 +7,16 @@ const publicRoutes = [
     pageRoutes.signup,
 ];
 
-function isPublicRoute(pathname: string) {
-    return publicRoutes.some(
+// Signed-in visitors of these are sent to their dashboard. "/" is left out on
+// purpose: it is where a dead session lands after logout, so it must never
+// redirect, or stale cookies could bounce the user straight back.
+const signedInRedirectRoutes = [
+    pageRoutes.signin,
+    pageRoutes.signup,
+];
+
+function matchesRoute(routes: string[], pathname: string) {
+    return routes.some(
         (route) =>
             pathname === route ||
             pathname.startsWith(`${route}/`),
@@ -44,14 +52,24 @@ function isProtectedRoute(pathname: string) {
     return true;
 }
 
+function isPublicRoute(pathname: string) {
+    return matchesRoute(publicRoutes, pathname);
+}
+
 export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    const accessToken = request.cookies.get("token")?.value;
-    const isAuthenticated = Boolean(accessToken);
+    // Lightweight gating only — nothing here is verified. `token` expires with
+    // the access JWT, so `authSession` (set alongside the refresh token, same
+    // lifetime) keeps an expired-but-refreshable session from being bounced
+    // to signin before the client can refresh. The backend stays the
+    // authority: a forged cookie only gets you a page that fails to load data.
+    const isAuthenticated = Boolean(
+        request.cookies.get("token")?.value || request.cookies.get("authSession")?.value,
+    );
 
-    // Authenticated user should not access auth/public pages
-    if (isAuthenticated && isPublicRoute(pathname)) {
+    // Authenticated user should not access signin/signup
+    if (isAuthenticated && matchesRoute(signedInRedirectRoutes, pathname)) {
         const organizationId = getOrganizationId(request);
 
         if (organizationId) {

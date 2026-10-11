@@ -1,19 +1,12 @@
-import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { reqToLogout } from "@/lib/store/slices/authSlice";
+import { useAppSelector } from "@/lib/store/hooks";
+import { endSession } from "@/lib/auth/session";
 
 export function useAuth() {
-    const dispatch = useAppDispatch();
     const { user, isLoading, isAuthChecked, needResetPassword } = useAppSelector((state) => state.auth);
 
-    const logout = (onDone?: () => void) => {
-        dispatch(
-            reqToLogout({
-                data: null,
-                onSuccess: () => onDone?.(),
-                onFailure: () => onDone?.(),
-            }),
-        );
-    };
+    // Same cleanup as an expired session (backend clears the cookies, client
+    // storage and Redux are wiped), but no expiry notice: straight to "/".
+    const logout = () => endSession("logout");
 
     return {
         user,

@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 
 import "./globals.css";
 import StoreProvider from "@/lib/store/StoreProvider";
+import { SessionExpiredDialog } from "@/components/layout/session-expired-dialog";
 
 const THEME_INIT_SCRIPT = `
   try {
@@ -46,6 +47,7 @@ export default function RootLayout({
           </Script>
           {children}
           <Toaster richColors position="top-right" />
+          <SessionExpiredDialog />
         </body>
       </StoreProvider>
     </html>

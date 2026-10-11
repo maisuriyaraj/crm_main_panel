@@ -8,7 +8,8 @@ import { z } from "zod";
 import { Lock } from "lucide-react";
 
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
-import { useAppDispatch } from "@/lib/store/hooks";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { endSession } from "@/lib/auth/session";
 import { reqToFetchMe, reqToResetPassword } from "@/lib/store/slices/authSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { notify } from "@/lib/commonFunctions";
@@ -40,6 +41,7 @@ export default function ResetPasswordPage() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const { user, isAuthChecked, needResetPassword } = useAuth();
+  const sessionCheckFailed = useAppSelector((state) => state.auth.sessionCheckFailed);
 
   const form = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -55,12 +57,12 @@ export default function ResetPasswordPage() {
   useEffect(() => {
     if (!isAuthChecked) return;
 
-    if (!user) {
-      router.replace(pageRoutes.signin);
-      return;
+    // Same rule as AuthGuard: a dead session exits through endSession so
+    // cookies and storage are cleared, and a transient failure doesn't.
+    if (!user && !needResetPassword && !sessionCheckFailed) {
+      void endSession();
     }
-
-  }, [isAuthChecked, user, router]);
+  }, [isAuthChecked, user, needResetPassword, sessionCheckFailed]);
 
   const onSubmit = (values: ResetPasswordValues) => {
     dispatch(
