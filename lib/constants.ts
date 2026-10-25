@@ -32,7 +32,6 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost
 
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",
-    bookDemo:"/user/bookings",
     publicBookings: "/public/bookings",
     bookingAvailability: "/public/bookings/availability",
     login: "/auth/login",

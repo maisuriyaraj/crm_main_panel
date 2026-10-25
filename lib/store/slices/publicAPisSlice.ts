@@ -28,22 +28,6 @@ interface ThunkArg<D, R> {
     onFailure?: (error: BookingApiError) => void;
 }
 
-// Legacy date-only endpoint, used by the old form until it is replaced.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const reqToBookADemo = createAsyncThunk<any, any, { rejectValue: { message: string } }>(
-    "publicSlice/reqToBookADemo",
-    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
-        try {
-            const response = await Axios.post(apiRoutes.bookDemo, data);
-            onSuccess?.(response.data);
-            return response.data;
-        } catch (error) {
-            onFailure?.(error);
-            return rejectWithValue({ message: toBookingError(error, "Couldn't book your demo. Please try again.").message });
-        }
-    }
-);
-
 export const reqToCreateBooking = createAsyncThunk<BookingAck, ThunkArg<BookingRequest, BookingAck>, { rejectValue: BookingApiError }>(
     "publicSlice/reqToCreateBooking",
     async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
@@ -83,7 +67,7 @@ const publicAPis = createSlice({
     initialState,
     reducers: {},
     extraReducers: (builder) => {
-        for (const thunk of [reqToBookADemo, reqToCreateBooking]) {
+        for (const thunk of [reqToCreateBooking]) {
             builder.addCase(thunk.pending, (state) => {
                 state.isLoading = true;
                 state.error = null;
