@@ -62,7 +62,9 @@ type NavEntry = NavLink | NavParent;
 
 type NavGroupConfig = {
   label: string;
-  roles?: string[];
+  // Hides the group unless /me grants this permission. UX only; the API is
+  // the real gate.
+  permission?: string;
   items: NavEntry[];
 };
 
@@ -97,7 +99,7 @@ const navGroups: NavGroupConfig[] = [
   },
   {
     label: "Organization",
-    roles: ["Admin"],
+    permission: "team.view",
     items: [{ label: "Team", icon: UsersRound, href: pageRoutes.settingsTeam }],
   },
 ];
@@ -109,7 +111,7 @@ function isNavParent(item: NavEntry): item is NavParent {
 export function AppSidebar() {
   const pathname = usePathname();
   const params = useParams<{ orgnization: string }>();
-  const { role } = useAuth();
+  const { can } = useAuth();
   const orgSlug = params?.orgnization ?? "";
 
   const buildHref = (route: string) => buildOrgRoute(orgSlug, route);
@@ -130,7 +132,7 @@ export function AppSidebar() {
 
       <SidebarContent>
         {navGroups.map((group) => {
-          if (group.roles && !group.roles.includes(role ?? "")) {
+          if (group.permission && !can(group.permission)) {
             return null;
           }
 

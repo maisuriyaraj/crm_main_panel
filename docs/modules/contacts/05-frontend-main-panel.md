@@ -39,7 +39,7 @@ in the browser (`07-gotchas.md` #11).
 | Trigger | Thunk | Endpoint |
 |---|---|---|
 | Mount, and any filter/page change | `reqToGetContacts` | `GET /api/contacts` |
-| Mount | `reqToGetOrgUsers` | `GET /api/app/users` |
+| Mount | `reqToGetMemberOptions` | `GET /api/app/members/options` (active teammates, names only; any role) |
 | Detail sheet opened | `reqToGetContactNotes` | `GET /api/contacts/:id/notes` |
 
 ### Actions
@@ -47,12 +47,14 @@ in the browser (`07-gotchas.md` #11).
 | Action | Thunk | Gated |
 |---|---|---|
 | Create / edit | `reqToCreateContact`, `reqToUpdateContact` | no |
-| Delete | `reqToDeleteContact` | `isAdmin` — control hidden |
-| Bulk delete / reassign | `reqToBulkDeleteContacts`, `reqToBulkUpdateContacts` | `isAdmin` — bulk bar hidden |
+| Delete | `reqToDeleteContact` | `can("contacts.delete")` — control hidden |
+| Bulk delete / reassign | `reqToBulkDeleteContacts`, `reqToBulkUpdateContacts` | `can("contacts.bulk")` — selection column and bulk bar hidden |
 | Add / edit / delete note | `reqToCreateContactNote`, `reqToUpdateContactNote`, `reqToDeleteContactNote` | note controls shown only to the author or an admin |
 
-Admin detection is `role === "Admin"` from `useAuth`, matching the Leads screen. Row
-selection is page-scoped and clears whenever the visible rows change.
+Controls are gated with `can(permission)` from `useAuth`, using the permission list `/me`
+returns (see `docs/specs/team-management-spec.md` §5). Note controls still use `isAdmin`, because the
+backend's note rule is author-or-admin. Row selection is page-scoped and clears whenever the
+visible rows change. An owner id missing from the active-member list renders as "Inactive member".
 
 ### Empty states
 
@@ -128,7 +130,7 @@ On mount (`main-panel/app/[orgnization]/leads/page.tsx:119-124`), three dispatch
 |---|---|
 | `reqToGetLeads` with `{limit: 1000}` | `GET /api/leads` |
 | `reqToGetLeadStatuses` | `GET /api/leads/statuses` |
-| `reqToGetOrgUsers` | `GET /api/app/users` (for the owner dropdown) |
+| `reqToGetMemberOptions` | `GET /api/app/members/options` (for the owner dropdown) |
 
 `LEADS_FETCH_LIMIT = 1000` is declared at
 `main-panel/app/[orgnization]/leads/page.tsx:72`.
@@ -151,15 +153,14 @@ notes.
 | Create lead | `reqToCreateLead` | `POST /api/leads` | no |
 | Edit lead | `reqToUpdateLead` | `PATCH /api/leads/:id` | no |
 | Drag card between columns | `reqToChangeLeadStage` | `PATCH /api/leads/:id/stage` | no |
-| Delete lead | `reqToDeleteLead` | `DELETE /api/leads/:id` | `isAdmin` (`:441`) |
-| Bulk delete | `reqToBulkDeleteLeads` | `DELETE /api/leads/bulk` | `isAdmin` (`:553`) |
-| Bulk stage / owner change | `reqToBulkUpdateLeads` | `PATCH /api/leads/bulk` | `isAdmin` (`:553`) |
+| Delete lead | `reqToDeleteLead` | `DELETE /api/leads/:id` | `can("leads.delete")` |
+| Bulk delete | `reqToBulkDeleteLeads` | `DELETE /api/leads/bulk` | `can("leads.bulk")` |
+| Bulk stage / owner change | `reqToBulkUpdateLeads` | `PATCH /api/leads/bulk` | `can("leads.bulk")` |
 | Add activity | `reqToAddLeadActivity` | `POST /api/leads/:id/activities` | no |
 | Add / edit / delete note | `reqToCreateLeadNote`, `reqToUpdateLeadNote`, `reqToDeleteLeadNote` | `/api/leads/notes` paths | no |
 
-Admin detection is `role === "Admin"`
-(`main-panel/app/[orgnization]/leads/page.tsx:81-82`), from the `useAuth` hook. Non-admins get
-**hidden controls**, not disabled ones — the bulk action bar and delete control are not
+Gating uses `can("leads.delete")` / `can("leads.bulk")` from the `useAuth` hook. Roles without
+them get **hidden controls**, not disabled ones — the bulk action bar and delete control are not
 rendered at all. The server independently rejects these calls (`03-business-rules.md` R-24), so
 this is defence in depth rather than the only barrier.
 

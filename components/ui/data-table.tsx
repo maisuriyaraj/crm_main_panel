@@ -29,6 +29,23 @@ export interface DataTableColumn<T> {
   sortable?: boolean;
   render?: (row: T) => React.ReactNode;
   accessor?: (row: T) => string | number | null | undefined;
+  // Applied to both the header and body cells, e.g. "hidden md:table-cell".
+  className?: string;
+}
+
+export type SortDirection = "asc" | "desc";
+
+// Server-driven mode: `data` is already the current page, and search, sort and
+// paging are reported to the caller instead of being applied locally.
+export interface DataTableManualState {
+  total: number;
+  page: number;
+  onPageChange: (page: number) => void;
+  sortKey?: string | null;
+  sortDir?: SortDirection;
+  onSortChange?: (key: string, dir: SortDirection) => void;
+  search?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 interface DataTableProps<T> {
@@ -39,7 +56,10 @@ interface DataTableProps<T> {
   searchKeys?: (keyof T)[];
   pageSize?: number;
   emptyMessage?: string;
+  // Replaces emptyMessage when the empty state needs actions or icons.
+  emptyState?: React.ReactNode;
   isLoading?: boolean;
+  manual?: DataTableManualState;
 }
 
 export function DataTable<T>({
@@ -50,24 +70,31 @@ export function DataTable<T>({
   searchKeys = [],
   pageSize = 10,
   emptyMessage = "No results found.",
+  emptyState,
   isLoading = false,
+  manual,
 }: DataTableProps<T>) {
-  const [search, setSearch] = React.useState("");
-  const [sortKey, setSortKey] = React.useState<string | null>(null);
-  const [sortDir, setSortDir] = React.useState<"asc" | "desc">("asc");
-  const [page, setPage] = React.useState(1);
+  const [localSearch, setLocalSearch] = React.useState("");
+  const [localSortKey, setLocalSortKey] = React.useState<string | null>(null);
+  const [localSortDir, setLocalSortDir] = React.useState<SortDirection>("asc");
+  const [localPage, setLocalPage] = React.useState(1);
+
+  const search = manual ? manual.search ?? "" : localSearch;
+  const sortKey = manual ? manual.sortKey ?? null : localSortKey;
+  const sortDir = manual ? manual.sortDir ?? "asc" : localSortDir;
+  const showSearch = manual ? !!manual.onSearchChange : searchKeys.length > 0;
 
   const filtered = React.useMemo(() => {
-    if (!search.trim() || searchKeys.length === 0) return data;
+    if (manual || !search.trim() || searchKeys.length === 0) return data;
 
     const term = search.trim().toLowerCase();
     return data.filter((row) =>
       searchKeys.some((key) => String(row[key] ?? "").toLowerCase().includes(term)),
     );
-  }, [data, search, searchKeys]);
+  }, [data, search, searchKeys, manual]);
 
   const sorted = React.useMemo(() => {
-    if (!sortKey) return filtered;
+    if (manual || !sortKey) return filtered;
 
     const column = columns.find((c) => c.key === sortKey);
     const getValue = column?.accessor ?? ((row: T) => (row as Record<string, unknown>)[sortKey] as string | number);
@@ -87,32 +114,46 @@ export function DataTable<T>({
       const comparison = String(aValue).localeCompare(String(bValue));
       return sortDir === "asc" ? comparison : -comparison;
     });
-  }, [filtered, sortKey, sortDir, columns]);
+  }, [filtered, sortKey, sortDir, columns, manual]);
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totalRows = manual ? manual.total : sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const currentPage = Math.min(manual ? manual.page : localPage, totalPages);
+  const paged = manual ? data : sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const setPage = (next: number) => {
+    const clamped = Math.min(Math.max(1, next), totalPages);
+    if (manual) manual.onPageChange(clamped);
+    else setLocalPage(clamped);
+  };
 
   const toggleSort = (key: string) => {
-    if (sortKey !== key) {
-      setSortKey(key);
-      setSortDir("asc");
-    } else {
-      setSortDir((dir) => (dir === "asc" ? "desc" : "asc"));
+    const nextDir: SortDirection = sortKey !== key ? "asc" : sortDir === "asc" ? "desc" : "asc";
+    if (manual) {
+      manual.onSortChange?.(key, nextDir);
+      return;
     }
+    setLocalSortKey(key);
+    setLocalSortDir(nextDir);
+  };
+
+  const onSearch = (value: string) => {
+    if (manual) {
+      manual.onSearchChange?.(value);
+      return;
+    }
+    setLocalSearch(value);
+    setLocalPage(1);
   };
 
   return (
     <div className="space-y-4">
-      {searchKeys.length > 0 && (
+      {showSearch && (
         <div className="relative max-w-sm">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              setPage(1);
-            }}
+            onChange={(event) => onSearch(event.target.value)}
             placeholder={searchPlaceholder}
             className="pl-9"
           />
@@ -124,7 +165,7 @@ export function DataTable<T>({
           <TableHeader>
             <TableRow>
               {columns.map((column) => (
-                <TableHead key={column.key}>
+                <TableHead key={column.key} className={column.className}>
                   {column.sortable ? (
                     <button
                       type="button"
@@ -157,7 +198,7 @@ export function DataTable<T>({
               Array.from({ length: pageSize }, (_, i) => (
                 <TableRow key={`skeleton-${i}`}>
                   {columns.map((column) => (
-                    <TableCell key={column.key}>
+                    <TableCell key={column.key} className={column.className}>
                       <Skeleton className="h-4 w-full max-w-40" />
                     </TableCell>
                   ))}
@@ -166,14 +207,14 @@ export function DataTable<T>({
             ) : paged.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
-                  {emptyMessage}
+                  {emptyState ?? emptyMessage}
                 </TableCell>
               </TableRow>
             ) : (
               paged.map((row) => (
                 <TableRow key={getRowId(row)}>
                   {columns.map((column) => (
-                    <TableCell key={column.key}>
+                    <TableCell key={column.key} className={column.className}>
                       {column.render
                         ? column.render(row)
                         : String((row as Record<string, unknown>)[column.key] ?? "")}
@@ -194,7 +235,7 @@ export function DataTable<T>({
                 href="#"
                 onClick={(event) => {
                   event.preventDefault();
-                  setPage((p) => Math.max(1, p - 1));
+                  setPage(currentPage - 1);
                 }}
                 className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
               />
@@ -220,7 +261,7 @@ export function DataTable<T>({
                 href="#"
                 onClick={(event) => {
                   event.preventDefault();
-                  setPage((p) => Math.min(totalPages, p + 1));
+                  setPage(currentPage + 1);
                 }}
                 className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
               />

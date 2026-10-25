@@ -23,11 +23,11 @@ import {
   reqToUpdateLead,
   reqToUpdateLeadNote,
 } from "@/lib/store/slices/leadsSlice";
-import { reqToGetOrgUsers } from "@/lib/store/slices/orgUsersSlice";
+import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
 import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
 import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
 import { resolveOwnerName, type Lead, type LeadActivityType } from "@/lib/leads/types";
-import { FALLBACK_LEAD_STATUSES, FALLBACK_OWNERS } from "@/lib/leads/fallback-data";
+import { FALLBACK_LEAD_STATUSES } from "@/lib/leads/fallback-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,21 +79,21 @@ export default function LeadsPage() {
   const searchParams = useSearchParams();
   const view = (searchParams.get("view") as ViewMode) || "list";
 
-  const { role } = useAuth();
-  const isAdmin = role === "Admin";
+  const { can } = useAuth();
+  const canDelete = can("leads.delete");
+  const canBulk = can("leads.bulk");
 
   const { leads, isLoading } = useAppSelector((state) => state.leads);
   const apiStatuses = useAppSelector((state) => state.leads.statuses);
   const activities = useAppSelector((state) => state.leads.activeLeadActivities);
   const notes = useAppSelector((state) => state.leads.activeLeadNotes);
-  const apiOwners = useAppSelector((state) => state.orgUsers.users);
+  // Active teammates (names only), readable by every role.
+  const owners = useAppSelector((state) => state.orgUsers.memberOptions);
 
-  // Stopgap: the backend isn't seeded/ready for every org yet (empty
-  // statuses list) and the org-users list is admin-only, so it 403s for
-  // non-admins. Fall back to static placeholders so the form isn't blocked;
-  // real data takes over automatically once either is actually populated.
+  // Stopgap: the backend isn't seeded for every org yet (empty statuses
+  // list). Fall back to static placeholders so the form isn't blocked; real
+  // data takes over automatically once it exists.
   const statuses = apiStatuses.length > 0 ? apiStatuses : FALLBACK_LEAD_STATUSES;
-  const owners = apiOwners.length > 0 ? apiOwners : FALLBACK_OWNERS;
 
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -120,7 +120,7 @@ export default function LeadsPage() {
   useEffect(() => {
     refreshLeads();
     dispatch(reqToGetLeadStatuses({ data: null }));
-    dispatch(reqToGetOrgUsers({ data: null }));
+    dispatch(reqToGetMemberOptions({ data: null }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
@@ -459,7 +459,7 @@ export default function LeadsPage() {
           <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
             Edit
           </Button>
-          {isAdmin && (
+          {canDelete && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
@@ -571,7 +571,7 @@ export default function LeadsPage() {
         </div>
       )}
 
-      {selectedIds.size > 0 && view === "list" && isAdmin && (
+      {selectedIds.size > 0 && view === "list" && canBulk && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
           <span className="text-sm font-medium">
             {selectedIds.size} selected{selectedIds.size === filteredLeads.length ? " (all filtered leads)" : ""}

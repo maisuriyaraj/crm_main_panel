@@ -5,6 +5,9 @@ import authReducer, { sessionEnded } from "./slices/authSlice";
 import orgUsersReducer from "./slices/orgUsersSlice";
 import leadsReducer from "./slices/leadsSlice";
 import contactsReducer from "./slices/contactsSlice";
+import teamInvitationsReducer from "./slices/teamInvitationsSlice";
+import teamRolesReducer from "./slices/teamRolesSlice";
+import teamAuditReducer from "./slices/teamAuditSlice";
 import { onSessionEnded } from "@/lib/auth/session";
 
 // Import additional slice reducers here as the project grows
@@ -16,6 +19,9 @@ const appReducer = combineReducers({
   orgUsers: orgUsersReducer,
   leads: leadsReducer,
   contacts: contactsReducer,
+  teamInvitations: teamInvitationsReducer,
+  teamRoles: teamRolesReducer,
+  teamAudit: teamAuditReducer,
   // Add more reducers here as you create new slices
 });
 

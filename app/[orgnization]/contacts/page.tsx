@@ -18,7 +18,7 @@ import {
   reqToUpdateContact,
   reqToUpdateContactNote,
 } from "@/lib/store/slices/contactsSlice";
-import { reqToGetOrgUsers } from "@/lib/store/slices/orgUsersSlice";
+import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
 import { mapApiErrorsToForm, mapContactPayloadToApi } from "@/lib/contacts/mappers";
 import type { Contact, ContactListQuery } from "@/lib/contacts/types";
 import { resolveOwnerName } from "@/lib/contacts/types";
@@ -59,14 +59,18 @@ const SEARCH_DEBOUNCE_MS = 350;
 
 export default function ContactsPage() {
   const dispatch = useAppDispatch();
-  const { user, role } = useAuth();
-  const isAdmin = role === "Admin";
+  const { user, isAdmin, can } = useAuth();
+  const canBulk = can("contacts.bulk");
+  const canDelete = can("contacts.delete");
+  // Name + Company + Email + Mobile + Owner + Tags, plus the gated columns.
+  const columnCount = 6 + (canBulk ? 1 : 0) + (canDelete ? 1 : 0);
   const currentUserId = user?.id ? String(user.id) : undefined;
 
   const { contacts, pagination, isLoading, activeContactNotes, notesLoading } = useAppSelector(
     (state) => state.contacts,
   );
-  const owners = useAppSelector((state) => state.orgUsers.users);
+  // Active teammates (names only), readable by every role.
+  const owners = useAppSelector((state) => state.orgUsers.memberOptions);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -100,7 +104,7 @@ export default function ContactsPage() {
   }, [refreshContacts]);
 
   useEffect(() => {
-    dispatch(reqToGetOrgUsers({ data: null }));
+    dispatch(reqToGetMemberOptions({ data: null }));
   }, [dispatch]);
 
   useEffect(() => {
@@ -309,7 +313,7 @@ export default function ContactsPage() {
         )}
       </div>
 
-      {selectedIds.size > 0 && isAdmin && (
+      {selectedIds.size > 0 && canBulk && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-2">
           <span className="text-sm">{selectedIds.size} selected</span>
           <Select onValueChange={handleBulkAssign}>
@@ -336,7 +340,7 @@ export default function ContactsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              {isAdmin && (
+              {canBulk && (
                 <TableHead className="w-10">
                   <Checkbox
                     checked={contacts.length > 0 && selectedIds.size === contacts.length}
@@ -351,21 +355,21 @@ export default function ContactsPage() {
               <TableHead>Mobile</TableHead>
               <TableHead>Owner</TableHead>
               <TableHead>Tags</TableHead>
-              {isAdmin && <TableHead className="w-10" />}
+              {canDelete && <TableHead className="w-10" />}
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 5 }).map((_, index) => (
                 <TableRow key={index}>
-                  <TableCell colSpan={isAdmin ? 8 : 6}>
+                  <TableCell colSpan={columnCount}>
                     <Skeleton className="h-6 w-full" />
                   </TableCell>
                 </TableRow>
               ))
             ) : contacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 8 : 6} className="py-12 text-center">
+                <TableCell colSpan={columnCount} className="py-12 text-center">
                   <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
                   {hasActiveFilters ? (
                     <>
@@ -391,7 +395,7 @@ export default function ContactsPage() {
                   className="cursor-pointer"
                   onClick={() => setDetailContact(contact)}
                 >
-                  {isAdmin && (
+                  {canBulk && (
                     <TableCell onClick={(event) => event.stopPropagation()}>
                       <Checkbox
                         checked={selectedIds.has(contact.id)}
@@ -423,7 +427,7 @@ export default function ContactsPage() {
                       )}
                     </div>
                   </TableCell>
-                  {isAdmin && (
+                  {canDelete && (
                     <TableCell onClick={(event) => event.stopPropagation()}>
                       <Button
                         size="icon"

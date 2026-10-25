@@ -17,3 +17,4 @@ auth | specs/auth/auth-flow.md | Shared login, silent token refresh, forced pass
 navigation | specs/navigation/sidebar-nav.md | User Panel sidebar nav component covering the full planned module set (Dashboard, Leads, Contacts, Companies, Deals, Tasks, Ads Manager submenu, Growth, admin-only Team) and its layout wiring. | Implemented
 leads | specs/leads/leads-ui.md | Leads module screens (List, Kanban, Analytics), forms, activity/notes, and tags — originally built on local demo data, now wired to the real API by lead-api-implementation.md. | Implemented
 leads | specs/leads/lead-api-implementation.md | Wires the Leads UI to the real backend API — Redux slice, api routes, snake_case/camelCase mapping — replacing the local demo data. | Implemented
+team | ../docs/specs/team-management-spec.md | Cross-app Team Management: Team page, invitations, accept-invite page, permission-based gating (shared with backend) | Implemented

@@ -63,8 +63,9 @@ export interface LeadNote {
   updatedAt: string;
 }
 
-// Matches the old demo-data.ts fallback behavior for an unresolved owner id.
+// `owners` lists active members only, so an id that doesn't resolve belongs to
+// someone who was suspended or removed after the record was assigned.
 export const resolveOwnerName = (owners: LeadOwner[], id?: string): string => {
   if (!id) return "Unknown";
-  return owners.find((owner) => owner.id === id)?.fullName ?? "Unknown";
+  return owners.find((owner) => owner.id === id)?.fullName ?? "Inactive member";
 };

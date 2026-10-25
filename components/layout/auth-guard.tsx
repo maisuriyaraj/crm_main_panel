@@ -6,9 +6,11 @@ import { useParams, useRouter } from "next/navigation";
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { endSession } from "@/lib/auth/session";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { reqToFetchMe } from "@/lib/store/slices/authSlice";
+import { reqToFetchMe, reqToRefreshProfile } from "@/lib/store/slices/authSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const PROFILE_REFRESH_INTERVAL_MS = 60 * 1000;
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
@@ -27,6 +29,23 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       dispatch(reqToFetchMe({ data: null }));
     }
   }, [dispatch, isAuthChecked]);
+
+  // A role change made by an admin elsewhere reaches this tab's menus when
+  // the user comes back to it, at most once a minute.
+  const hasUser = !!user;
+  useEffect(() => {
+    if (!hasUser) return;
+    let lastRefresh = Date.now();
+
+    const onFocus = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < PROFILE_REFRESH_INTERVAL_MS) return;
+      lastRefresh = Date.now();
+      dispatch(reqToRefreshProfile({ data: null }));
+    };
+
+    document.addEventListener("visibilitychange", onFocus);
+    return () => document.removeEventListener("visibilitychange", onFocus);
+  }, [dispatch, hasUser]);
 
   useEffect(() => {
     if (!isAuthChecked) return;

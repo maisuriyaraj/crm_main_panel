@@ -7,7 +7,14 @@ export interface AuthUser {
     id: number;
     email: string;
     role: string;
+    roleLabel?: string;
+    roleRank?: number;
+    // For rendering only; the API re-checks every action.
+    isAdmin?: boolean;
+    permissions?: string[];
     organizationId: number;
+    organizationName?: string | null;
+    organizationStatus?: string | null;
     fullName: string;
     mustResetPassword: boolean;
 }
@@ -93,6 +100,88 @@ export const reqToFetchMe = createAsyncThunk<
                 message: error?.response?.data?.message || "Failed to fetch account",
                 needResetPassword,
                 sessionCheckFailed: !isDefinitive && !needResetPassword,
+            });
+        }
+    }
+);
+
+// Background re-read of /me after permissions may have changed (a 403 from
+// the API, the window regaining focus). Unlike reqToFetchMe it only ever
+// updates the user: a failure leaves the session alone, and a dead session is
+// already ended by the Axios refresh interceptor.
+export const reqToRefreshProfile = createAsyncThunk<
+    any,
+    any,
+    { rejectValue: { message: string } }
+>(
+    "auth/reqToRefreshProfile",
+    async ({ onSuccess, onFailure } = {}, { rejectWithValue }) => {
+        try {
+            const response = await Axios.get(apiRoutes.me);
+
+            onSuccess?.(response.data);
+
+            return response.data?.data ?? response.data;
+        } catch (error: any) {
+            onFailure?.(error);
+
+            return rejectWithValue({
+                message: error?.response?.data?.message || "Failed to refresh account",
+            });
+        }
+    }
+);
+
+// Public invitation endpoints. The token is sent in the body, never the URL.
+export const reqToPreviewInvitation = createAsyncThunk<
+    any,
+    any,
+    { rejectValue: { message: string; code?: string } }
+>(
+    "auth/reqToPreviewInvitation",
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+        try {
+            const response = await Axios.post(apiRoutes.invitationPreview, { token: data.token });
+            const result = response.data?.data;
+
+            onSuccess?.(result);
+
+            return result;
+        } catch (error: any) {
+            onFailure?.(error);
+
+            return rejectWithValue({
+                message: error?.response?.data?.message || "Couldn't check this invitation",
+                code: error?.response?.data?.code,
+            });
+        }
+    }
+);
+
+// Accepting sets the same HttpOnly session cookies a login does.
+export const reqToAcceptInvitation = createAsyncThunk<
+    any,
+    any,
+    { rejectValue: { message: string; code?: string } }
+>(
+    "auth/reqToAcceptInvitation",
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+        try {
+            const response = await Axios.post(apiRoutes.invitationAccept, {
+                token: data.token,
+                full_name: data.fullName,
+                password: data.password,
+            });
+
+            onSuccess?.(response.data);
+
+            return response.data;
+        } catch (error: any) {
+            onFailure?.(error);
+
+            return rejectWithValue({
+                message: error?.response?.data?.message || "Couldn't accept this invitation",
+                code: error?.response?.data?.code,
             });
         }
     }
@@ -228,6 +317,12 @@ const authSlice = createSlice({
                 state.user = null;
             }
             state.isAuthChecked = true;
+        });
+
+        builder.addCase(reqToRefreshProfile.fulfilled, (state, action) => {
+            if (state.user && action.payload) {
+                state.user = action.payload;
+            }
         });
 
         builder.addCase(reqToResetPassword.pending, (state) => {

@@ -63,7 +63,9 @@ export interface ApiFieldError {
   message: string;
 }
 
+// `owners` lists active members only, so an id that doesn't resolve belongs to
+// someone who was suspended or removed after the record was assigned.
 export const resolveOwnerName = (owners: ContactOwner[], id?: string): string => {
   if (!id) return "Unassigned";
-  return owners.find((owner) => owner.id === id)?.fullName ?? "Unknown";
+  return owners.find((owner) => owner.id === id)?.fullName ?? "Inactive member";
 };
