@@ -28,28 +28,28 @@ export const buildOrgRoute = (orgSlug: string, route: string) => `/${orgSlug}${r
 
 // NEXT_PUBLIC_ so it is inlined into the client bundle; falls back to the
 // local backend for development.
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/";
 
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",
     bookDemo:"/user/bookings",
-    login: "/api/auth/login",
-    refreshToken: "/api/auth/refresh",
-    logout: "/api/auth/logout",
-    logoutAll: "/api/auth/logout-all",
-    me: "/api/auth/me",
-    resetPassword: "/api/auth/reset-password",
-    appUsers: "/api/app/users",
-    memberOptions: "/api/app/members/options",
-    appRoles: "/api/app/roles",
-    invitations: "/api/app/invitations",
-    ownershipTransfer: "/api/app/ownership/transfer",
-    teamAudit: "/api/app/team/audit",
-    invitationPreview: "/api/auth/invitations/preview",
-    invitationAccept: "/api/auth/invitations/accept",
-    leads: "/api/leads",
-    leadStatuses: "/api/leads/statuses",
-    leadNotes: "/api/leads/notes",
-    contacts: "/api/contacts",
-    contactNotes: "/api/contacts/notes",
-}
+    login: "/auth/login",
+    refreshToken: "/auth/refresh",
+    logout: "/auth/logout",
+    logoutAll: "/auth/logout-all",
+    me: "/auth/me",
+    resetPassword: "/auth/reset-password",
+    appUsers: "/app/users",
+    memberOptions: "/app/members/options",
+    appRoles: "/app/roles",
+    invitations: "/app/invitations",
+    ownershipTransfer: "/app/ownership/transfer",
+    teamAudit: "/app/team/audit",
+    invitationPreview: "/auth/invitations/preview",
+    invitationAccept: "/auth/invitations/accept",
+    leads: "/leads",
+    leadStatuses: "/leads/statuses",
+    leadNotes: "/leads/notes",
+    contacts: "/contacts",
+    contactNotes: "/contacts/notes",
+}
