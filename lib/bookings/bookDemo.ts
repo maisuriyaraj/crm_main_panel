@@ -36,11 +36,16 @@ export const MESSAGE_MAX = 2000;
 
 // `slots` are the instants the server offered for the chosen date; a slot is
 // only valid if it is one of them, so a stale page can't send an old time.
+// The server refuses control characters (line breaks, tabs, ...) in single-line names.
+const NO_CONTROL_CHARS = /^[^\p{Cc}]*$/u;
+
 export const bookDemoSchema = (slots: string[]) =>
     Yup.object({
-        fullName: Yup.string().trim().required("Full name is required").min(2, "Full name must be at least 2 characters").max(100, "Full name is too long"),
+        fullName: Yup.string().trim().required("Full name is required").min(2, "Full name must be at least 2 characters").max(100, "Full name is too long")
+            .matches(NO_CONTROL_CHARS, "Full name contains invalid characters"),
         businessEmail: Yup.string().trim().required("Work email is required").email("Enter a valid email").max(254, "Email is too long"),
-        businessName: Yup.string().trim().required("Business name is required").min(2, "Business name must be at least 2 characters").max(120, "Business name is too long"),
+        businessName: Yup.string().trim().required("Business name is required").min(2, "Business name must be at least 2 characters").max(120, "Business name is too long")
+            .matches(NO_CONTROL_CHARS, "Business name contains invalid characters"),
         teamSize: Yup.string().required("Please select your team size").oneOf([...TEAM_SIZES], "Please select your team size"),
         phoneNumber: Yup.string().trim().max(20, "Phone number is too long")
             .matches(/^\+?[0-9][0-9\s-]{6,19}$/, { message: "Enter a valid phone number", excludeEmptyString: true }),
@@ -96,7 +101,7 @@ export type BookingOutcome =
     | { kind: "other"; message: string };
 
 export const interpretBookingError = (error: BookingApiError): BookingOutcome => {
-    if (error.code === "DUPLICATE_OPEN_BOOKING" || error.status === 409) {
+    if (error.code === "DUPLICATE_OPEN_BOOKING") {
         return { kind: "duplicate", message: error.message };
     }
     if (error.status === 429) {

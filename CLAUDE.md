@@ -22,9 +22,8 @@ npm run dev      # start dev server (Turbopack) at localhost:3000
 npm run build    # production build
 npm run start    # run production build
 npm run lint     # eslint
+npm test         # node:test suites in tests/ (no test framework beyond Node's own)
 ```
-
-No test runner is configured in this project.
 
 ## Folder Map
 

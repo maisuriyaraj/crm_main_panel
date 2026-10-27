@@ -18,3 +18,4 @@ navigation | specs/navigation/sidebar-nav.md | User Panel sidebar nav component 
 leads | specs/leads/leads-ui.md | Leads module screens (List, Kanban, Analytics), forms, activity/notes, and tags — originally built on local demo data, now wired to the real API by lead-api-implementation.md. | Implemented
 leads | specs/leads/lead-api-implementation.md | Wires the Leads UI to the real backend API — Redux slice, api routes, snake_case/camelCase mapping — replacing the local demo data. | Implemented
 team | ../docs/specs/team-management-spec.md | Cross-app Team Management: Team page, invitations, accept-invite page, permission-based gating (shared with backend) | Implemented
+bookings | ../docs/bookings/spec.md | Public Book a Demo form on the v2 availability and create endpoints (shared with backend, mst_admin) | Approved

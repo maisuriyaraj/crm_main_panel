@@ -122,6 +122,17 @@ test("a refused slot, a duplicate, and a rate limit are told apart", () => {
     assert.equal(form.interpretBookingError({ status: 500, message: "Something went wrong." }).kind, "other");
 });
 
+test("only the duplicate code means 'we already have your request'; any other 409 is a plain error", () => {
+    const outcome = form.interpretBookingError({ status: 409, code: "SOMETHING_ELSE", message: "Conflict" });
+    assert.deepEqual(outcome, { kind: "other", message: "Conflict" });
+});
+
+test("names with line breaks are refused, as the server does", async () => {
+    const errors = await errorsFor(filled({ fullName: "Asha\nBcc: x@evil.io", businessName: "Acme\tTraders" }));
+    assert.equal(errors.fullName, "Full name contains invalid characters");
+    assert.equal(errors.businessName, "Business name contains invalid characters");
+});
+
 // ─── Labels never shift a day ────────────────────────────────────────────────
 
 test("day labels show the visitor's own date, whatever the browser's timezone", () => {

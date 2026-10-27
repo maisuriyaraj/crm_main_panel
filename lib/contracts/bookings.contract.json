@@ -1,0 +1,97 @@
+{
+  "statuses": [
+    "pending",
+    "confirmed",
+    "in_progress",
+    "completed",
+    "cancelled",
+    "failed"
+  ],
+  "open_statuses": [
+    "pending",
+    "confirmed",
+    "in_progress"
+  ],
+  "terminal_statuses": [
+    "completed",
+    "cancelled",
+    "failed"
+  ],
+  "reschedulable_statuses": [
+    "pending",
+    "confirmed"
+  ],
+  "team_sizes": [
+    "1-10",
+    "11-50",
+    "51-200",
+    "200+"
+  ],
+  "meeting_types": [
+    "virtual",
+    "onsite"
+  ],
+  "failure_reasons": [
+    "no_show",
+    "technical_issue",
+    "other"
+  ],
+  "allowed_durations": [
+    15,
+    30,
+    45,
+    60,
+    90
+  ],
+  "max_invite_emails": 5,
+  "limits": {
+    "full_name": {
+      "min": 2,
+      "max": 100
+    },
+    "organization_name": {
+      "min": 2,
+      "max": 120
+    },
+    "email": {
+      "max": 254
+    },
+    "mobile": {
+      "max": 20
+    },
+    "business_requirements": {
+      "max": 2000
+    },
+    "note": {
+      "min": 1,
+      "max": 2000
+    },
+    "cancel_reason": {
+      "min": 3,
+      "max": 500
+    },
+    "meeting_link": {
+      "max": 500
+    }
+  },
+  "error_codes": [
+    "ALREADY_CONVERTED",
+    "BOOKING_NOT_FOUND",
+    "DELETE_REQUIRES_TERMINAL",
+    "DUPLICATE_OPEN_BOOKING",
+    "INTERNAL",
+    "INVALID_TRANSITION",
+    "MASTER_INACTIVE",
+    "ORGANIZATION_ADMIN_EXISTS",
+    "OWNER_INACTIVE",
+    "OWNER_SCHEDULE_CONFLICT",
+    "RESCHEDULE_LIMIT_REACHED",
+    "SCHEMA_OUTDATED",
+    "SLOT_NOT_ALLOWED",
+    "STALE_BOOKING",
+    "TOKEN_EXPIRED",
+    "TOKEN_INVALID",
+    "TOKEN_MISSING",
+    "VALIDATION_FAILED"
+  ]
+}

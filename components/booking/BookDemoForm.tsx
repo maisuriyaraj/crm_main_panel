@@ -30,8 +30,9 @@ import {
     type BookDemoValues,
 } from "@/lib/bookings/bookDemo";
 
-const WINDOW_DAYS = 14;
-const HORIZON_DAYS = 60;
+// Used only until the first availability answer says what the server allows.
+const DEFAULT_WINDOW_DAYS = 14;
+const DEFAULT_HORIZON_DAYS = 60;
 const FIELD_ORDER: (keyof BookDemoValues)[] = ["fullName", "businessEmail", "businessName", "teamSize", "phoneNumber", "preferredDate", "preferredSlot", "message"];
 
 const inputClass = "rounded-xl px-4 py-3 h-auto";
@@ -128,7 +129,7 @@ function Confirmation({ done, timezone }: { done: Done; timezone: string }) {
             <CheckCircle2 className="size-10 text-primary" aria-hidden />
             {done.kind === "booked" ? (
                 <>
-                    <h2 className="text-2xl font-bold">You&apos;re booked in!</h2>
+                    <h2 className="text-2xl font-bold">Request received</h2>
                     <p className="text-muted-foreground">
                         Your demo request for <strong className="text-foreground">{formatBookedTime(done.ack.scheduled_at, timezone)}</strong> is in.
                     </p>
@@ -157,32 +158,41 @@ export default function BookDemoForm() {
     const [windowEnd, setWindowEnd] = useState<string | null>(null);
     const [slotsState, setSlotsState] = useState<"loading" | "ready" | "error">("loading");
     const [done, setDone] = useState<Done | null>(null);
+    const [windowDays, setWindowDays] = useState(DEFAULT_WINDOW_DAYS);
+    const [horizonDays, setHorizonDays] = useState(DEFAULT_HORIZON_DAYS);
+
+    const rememberLimits = useCallback((availability: { max_range_days?: number; max_horizon_days?: number }) => {
+        if (availability.max_range_days) setWindowDays(availability.max_range_days);
+        if (availability.max_horizon_days) setHorizonDays(availability.max_horizon_days);
+    }, []);
 
     // Loads one window of dates (in the visitor's calendar) and appends it.
     // State only changes once the request settles; callers that want a loading
     // indicator set it themselves (see reload below).
     const loadWindow = useCallback(async (from: string, replace = false) => {
-        const to = addDays(from, WINDOW_DAYS - 1);
+        const to = addDays(from, windowDays - 1);
         const action = await dispatch(reqBookingAvailability({ data: { from, to, timezone } }));
         if (reqBookingAvailability.fulfilled.match(action)) {
             setDays((prev) => (replace ? action.payload.days : [...prev, ...action.payload.days]));
             setWindowEnd(to);
+            rememberLimits(action.payload);
             setSlotsState("ready");
         } else {
             setSlotsState("error");
         }
-    }, [dispatch, timezone]);
+    }, [dispatch, timezone, windowDays, rememberLimits]);
 
     const today = useMemo(() => todayInZone(timezone), [timezone]);
     // First window of dates on mount; a late answer after unmount is ignored.
     useEffect(() => {
         let active = true;
-        const to = addDays(today, WINDOW_DAYS - 1);
+        const to = addDays(today, DEFAULT_WINDOW_DAYS - 1);
         dispatch(reqBookingAvailability({ data: { from: today, to, timezone } })).then((action) => {
             if (!active) return;
             if (reqBookingAvailability.fulfilled.match(action)) {
                 setDays(action.payload.days);
                 setWindowEnd(to);
+                rememberLimits(action.payload);
                 setSlotsState("ready");
             } else {
                 setSlotsState("error");
@@ -191,7 +201,7 @@ export default function BookDemoForm() {
         return () => {
             active = false;
         };
-    }, [dispatch, today, timezone]);
+    }, [dispatch, today, timezone, rememberLimits]);
 
     const reload = (from: string, replace = false) => {
         setSlotsState("loading");
@@ -199,7 +209,7 @@ export default function BookDemoForm() {
     };
 
     const bookableDays = daysWithSlots(days);
-    const canLoadMore = !!windowEnd && windowEnd < addDays(today, HORIZON_DAYS);
+    const canLoadMore = !!windowEnd && windowEnd < addDays(today, horizonDays);
 
     const onSubmit = async (values: BookDemoValues, helpers: FormikHelpers<BookDemoValues>) => {
         const action = await dispatch(reqToCreateBooking({ data: buildBookingRequest(values, timezone) }));

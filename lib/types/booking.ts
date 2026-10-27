@@ -37,6 +37,11 @@ export interface Availability {
     duration_minutes: number;
     min_lead_minutes: number;
     max_horizon_days: number;
+    // How many dates one availability request may cover.
+    max_range_days: number;
+    business_days: number[];
+    open_time: string;
+    close_time: string;
     days: AvailabilityDay[];
 }
 
