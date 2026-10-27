@@ -34,10 +34,10 @@ import {
 import {
   Select,
   SelectContent,
-  SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RoleSelectItems } from "@/components/team/role-select-items";
 import { InviteLinkView } from "@/components/team/invite-link-view";
 
 const inviteSchema = z.object({
@@ -226,14 +226,7 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {assignable.map((role) => (
-                          <SelectItem key={role.id} value={role.id}>
-                            {role.label}
-                            {role.description ? (
-                              <span className="ml-2 text-xs text-muted-foreground">{role.description}</span>
-                            ) : null}
-                          </SelectItem>
-                        ))}
+                        <RoleSelectItems roles={roles} />
                       </SelectContent>
                     </Select>
                     <FormMessage />

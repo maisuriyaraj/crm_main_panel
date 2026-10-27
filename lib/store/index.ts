@@ -8,6 +8,7 @@ import contactsReducer from "./slices/contactsSlice";
 import teamInvitationsReducer from "./slices/teamInvitationsSlice";
 import teamRolesReducer from "./slices/teamRolesSlice";
 import teamAuditReducer from "./slices/teamAuditSlice";
+import permissionCatalogReducer from "./slices/permissionCatalogSlice";
 import { onSessionEnded } from "@/lib/auth/session";
 
 // Import additional slice reducers here as the project grows
@@ -22,6 +23,7 @@ const appReducer = combineReducers({
   teamInvitations: teamInvitationsReducer,
   teamRoles: teamRolesReducer,
   teamAudit: teamAuditReducer,
+  permissionCatalog: permissionCatalogReducer,
   // Add more reducers here as you create new slices
 });
 

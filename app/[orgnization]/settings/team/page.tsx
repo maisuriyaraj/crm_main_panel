@@ -17,8 +17,9 @@ import { MembersTab } from "@/components/team/members-tab";
 import { InvitationsTab } from "@/components/team/invitations-tab";
 import { ActivityTab } from "@/components/team/activity-tab";
 import { InviteMemberDialog } from "@/components/team/invite-member-dialog";
+import { RolesTab } from "@/components/team/roles-tab";
 
-type TeamTab = "members" | "invitations" | "activity";
+type TeamTab = "members" | "invitations" | "roles" | "activity";
 
 export default function TeamSettingsPage() {
   return (
@@ -36,29 +37,45 @@ function TeamSettings() {
   const params = useParams<{ orgnization: string }>();
   const { user, can } = useAuth();
   const summary = useAppSelector((state) => state.orgUsers.summary);
+  const rolesState = useAppSelector((state) => state.teamRoles);
 
   const canView = can("team.view");
   const canInvite = can("team.invite");
   const canViewAudit = can("team.audit.view");
+  const canManageRoles = can("roles.manage");
   const orgName = user?.organizationName || "your organization";
   const orgInactive = !!user?.organizationStatus && user.organizationStatus !== "active";
 
   const requestedTab = searchParams.get("tab");
   const tab: TeamTab =
-    requestedTab === "invitations" || (requestedTab === "activity" && canViewAudit) ? requestedTab : "members";
+    requestedTab === "invitations" || requestedTab === "roles" || (requestedTab === "activity" && canViewAudit)
+      ? requestedTab
+      : "members";
+  // Set by "View members" on a role, so the Members tab opens filtered to it.
+  const roleFilter = searchParams.get("role") ?? undefined;
+
+  const orgSlug = params?.orgnization ?? "";
+  const teamHref = buildOrgRoute(orgSlug, pageRoutes.settingsTeam);
+  const roleHref = (roleId: string) => buildOrgRoute(orgSlug, `${pageRoutes.settingsTeamRoles}/${encodeURIComponent(roleId)}`);
+  const newRoleHref = (fromRoleId?: string) =>
+    buildOrgRoute(orgSlug, pageRoutes.settingsTeamRoleNew) + (fromRoleId ? `?from=${encodeURIComponent(fromRoleId)}` : "");
+  const membersHref = (roleId: string) => `${teamHref}?role=${encodeURIComponent(roleId)}`;
 
   // Bumped after every change so each tab and the summary reload.
   const [version, setVersion] = useState(0);
   const refresh = useCallback(() => setVersion((v) => v + 1), []);
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  useEffect(() => {
+  // Also refreshed after team changes: member counts per role move with them.
+  const loadRoles = useCallback(() => {
     if (canView) dispatch(reqToGetTeamRoles({ data: null }));
   }, [dispatch, canView]);
+  useEffect(loadRoles, [loadRoles, version]);
 
   // The tab lives in the query string so links and reloads keep it.
   const setTab = (next: string) => {
     const query = new URLSearchParams(searchParams.toString());
+    query.delete("role");
     if (next === "members") query.delete("tab");
     else query.set("tab", next);
     const qs = query.toString();
@@ -145,6 +162,7 @@ function TeamSettings() {
           <TabsTrigger value="invitations">
             Invitations{summary ? ` (${summary.pendingInvitations})` : ""}
           </TabsTrigger>
+          <TabsTrigger value="roles">Roles</TabsTrigger>
           {canViewAudit && <TabsTrigger value="activity">Activity</TabsTrigger>}
         </TabsList>
 
@@ -152,15 +170,31 @@ function TeamSettings() {
             seat summary shown in the header. */}
         <TabsContent value="members" forceMount className="mt-4 data-[state=inactive]:hidden">
           <MembersTab
+            key={roleFilter ?? "all-roles"}
             orgName={orgName}
             version={version}
             canInvite={canInvite}
+            roleFilter={roleFilter}
             onInvite={() => setInviteOpen(true)}
             onChanged={refresh}
           />
         </TabsContent>
         <TabsContent value="invitations" className="mt-4">
           <InvitationsTab version={version} canInvite={canInvite} onInvite={() => setInviteOpen(true)} onChanged={refresh} />
+        </TabsContent>
+        <TabsContent value="roles" className="mt-4">
+          <RolesTab
+            roles={rolesState.roles}
+            isLoading={rolesState.isLoading}
+            error={rolesState.error}
+            canManage={canManageRoles && !orgInactive}
+            onRetry={loadRoles}
+            onChanged={refresh}
+            roleHref={roleHref}
+            newRoleHref={newRoleHref}
+            membersHref={membersHref}
+            invitationsHref={`${teamHref}?tab=invitations`}
+          />
         </TabsContent>
         {canViewAudit && (
           <TabsContent value="activity" className="mt-4">

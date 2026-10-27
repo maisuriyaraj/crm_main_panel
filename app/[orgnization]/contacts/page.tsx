@@ -49,6 +49,7 @@ import {
   type ContactFormValues,
 } from "@/components/contacts/contact-form-dialog";
 import { ContactDetailSheet } from "@/components/contacts/contact-detail-sheet";
+import { NoAccess } from "@/components/auth/no-access";
 
 const PAGE_SIZE = 20;
 const ALL = "all";
@@ -58,10 +59,22 @@ const ALL = "all";
 const SEARCH_DEBOUNCE_MS = 350;
 
 export default function ContactsPage() {
+  const { user, can } = useAuth();
+  if (!user) return null;
+  if (!can("contacts.view")) return <NoAccess title="Contacts" area="Contacts" />;
+  return <ContactsWorkspace />;
+}
+
+// Each control is gated by the key its API route checks (contacts.routes.js).
+function ContactsWorkspace() {
   const dispatch = useAppDispatch();
-  const { user, isAdmin, can } = useAuth();
+  const { user, can } = useAuth();
+  const canCreate = can("contacts.create");
+  const canUpdate = can("contacts.update");
   const canBulk = can("contacts.bulk");
   const canDelete = can("contacts.delete");
+  const canManageNotes = can("contacts.notes.manage");
+  const canLookupMembers = can("members.lookup");
   // Name + Company + Email + Mobile + Owner + Tags, plus the gated columns.
   const columnCount = 6 + (canBulk ? 1 : 0) + (canDelete ? 1 : 0);
   const currentUserId = user?.id ? String(user.id) : undefined;
@@ -104,8 +117,8 @@ export default function ContactsPage() {
   }, [refreshContacts]);
 
   useEffect(() => {
-    dispatch(reqToGetMemberOptions({ data: null }));
-  }, [dispatch]);
+    if (canLookupMembers) dispatch(reqToGetMemberOptions({ data: null }));
+  }, [dispatch, canLookupMembers]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -269,10 +282,12 @@ export default function ContactsPage() {
             {pagination ? `${pagination.total} total` : " "}
           </p>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Contact
-        </Button>
+        {canCreate && (
+          <Button onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Contact
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -381,9 +396,11 @@ export default function ContactsPage() {
                   ) : (
                     <>
                       <p className="text-sm">No contacts yet.</p>
-                      <Button variant="link" onClick={openCreate}>
-                        Add your first contact
-                      </Button>
+                      {canCreate && (
+                        <Button variant="link" onClick={openCreate}>
+                          Add your first contact
+                        </Button>
+                      )}
                     </>
                   )}
                 </TableCell>
@@ -489,20 +506,28 @@ export default function ContactsPage() {
         notes={activeContactNotes}
         notesLoading={notesLoading}
         currentUserId={currentUserId}
-        isAdmin={isAdmin}
+        canManageNotes={canManageNotes}
         open={!!detailContact}
         onOpenChange={(open) => !open && setDetailContact(null)}
-        onEdit={(contact) => {
-          setDetailContact(null);
-          openEdit(contact);
-        }}
-        onAddNote={(note) =>
-          noteAction(reqToCreateContactNote, { id: detailContact?.id, note }, "Note added")
+        onEdit={
+          canUpdate
+            ? (contact) => {
+                setDetailContact(null);
+                openEdit(contact);
+              }
+            : undefined
         }
-        onUpdateNote={(noteId, note) =>
-          noteAction(reqToUpdateContactNote, { noteId, note }, "Note updated")
+        onAddNote={
+          canUpdate
+            ? (note) => noteAction(reqToCreateContactNote, { id: detailContact?.id, note }, "Note added")
+            : undefined
         }
-        onDeleteNote={(noteId) => noteAction(reqToDeleteContactNote, { noteId }, "Note deleted")}
+        onUpdateNote={
+          canUpdate ? (noteId, note) => noteAction(reqToUpdateContactNote, { noteId, note }, "Note updated") : undefined
+        }
+        onDeleteNote={
+          canUpdate ? (noteId) => noteAction(reqToDeleteContactNote, { noteId }, "Note deleted") : undefined
+        }
       />
     </div>
   );

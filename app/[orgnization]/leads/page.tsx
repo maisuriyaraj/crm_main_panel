@@ -56,6 +56,7 @@ import { LeadFormDialog, type LeadFormValues } from "@/components/leads/lead-for
 import { KanbanBoard } from "@/components/leads/kanban-board";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadAnalytics } from "@/components/leads/lead-analytics";
+import { NoAccess } from "@/components/auth/no-access";
 
 type ViewMode = "list" | "kanban" | "analytics";
 
@@ -73,15 +74,27 @@ const PRIORITY_VARIANT: Record<Lead["priority"], "default" | "secondary" | "outl
 const LEADS_FETCH_LIMIT = 1000;
 
 export default function LeadsPage() {
+  const { user, can } = useAuth();
+  if (!user) return null;
+  if (!can("leads.view")) return <NoAccess title="Leads" area="Leads" />;
+  return <LeadsWorkspace />;
+}
+
+// Each control is gated by the key its API route checks (leads.routes.js).
+function LeadsWorkspace() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const view = (searchParams.get("view") as ViewMode) || "list";
 
-  const { can } = useAuth();
+  const { can, canAll } = useAuth();
+  const canCreate = can("leads.create");
+  const canUpdate = can("leads.update");
   const canDelete = can("leads.delete");
   const canBulk = can("leads.bulk");
+  const canConvert = canAll(["leads.update", "contacts.create"]);
+  const canLookupMembers = can("members.lookup");
 
   const { leads, isLoading } = useAppSelector((state) => state.leads);
   const apiStatuses = useAppSelector((state) => state.leads.statuses);
@@ -120,7 +133,7 @@ export default function LeadsPage() {
   useEffect(() => {
     refreshLeads();
     dispatch(reqToGetLeadStatuses({ data: null }));
-    dispatch(reqToGetMemberOptions({ data: null }));
+    if (canLookupMembers) dispatch(reqToGetMemberOptions({ data: null }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
@@ -349,7 +362,7 @@ export default function LeadsPage() {
     );
   };
 
-  const columns: DataTableColumn<Lead>[] = [
+  const allColumns: DataTableColumn<Lead>[] = [
     {
       key: "select",
       header: (
@@ -456,9 +469,11 @@ export default function LeadsPage() {
       header: "",
       render: (row) => (
         <div className="flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
-            Edit
-          </Button>
+          {canUpdate && (
+            <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
+              Edit
+            </Button>
+          )}
           {canDelete && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -485,6 +500,9 @@ export default function LeadsPage() {
     },
   ];
 
+  // The selection column only feeds the bulk bar.
+  const columns = canBulk ? allColumns : allColumns.filter((column) => column.key !== "select");
+
   const detailLead = leads.find((l) => l.id === detailLeadId) ?? null;
 
   return (
@@ -504,9 +522,11 @@ export default function LeadsPage() {
           onOpenChange={setFormOpen}
           onSubmit={handleFormSubmit}
           trigger={
-            <Button onClick={openCreate}>
-              <Plus className="h-4 w-4" /> New Lead
-            </Button>
+            canCreate ? (
+              <Button onClick={openCreate}>
+                <Plus className="h-4 w-4" /> New Lead
+              </Button>
+            ) : undefined
           }
         />
       </div>
@@ -637,7 +657,7 @@ export default function LeadsPage() {
           statuses={statuses}
           owners={owners}
           onOpen={setDetailLeadId}
-          onMoveLead={handleMoveLead}
+          onMoveLead={canUpdate ? handleMoveLead : undefined}
         />
       )}
 
@@ -651,15 +671,19 @@ export default function LeadsPage() {
         owners={owners}
         open={!!detailLeadId}
         onOpenChange={(open) => !open && setDetailLeadId(null)}
-        onEdit={(lead) => {
-          setDetailLeadId(null);
-          openEdit(lead);
-        }}
-        onAddActivity={handleAddActivity}
-        onAddNote={handleAddNote}
-        onUpdateNote={handleUpdateNote}
-        onDeleteNote={handleDeleteNote}
-        onConvert={handleConvertLead}
+        onEdit={
+          canUpdate
+            ? (lead) => {
+                setDetailLeadId(null);
+                openEdit(lead);
+              }
+            : undefined
+        }
+        onAddActivity={canUpdate ? handleAddActivity : undefined}
+        onAddNote={canUpdate ? handleAddNote : undefined}
+        onUpdateNote={canUpdate ? handleUpdateNote : undefined}
+        onDeleteNote={canUpdate ? handleDeleteNote : undefined}
+        onConvert={canConvert ? handleConvertLead : undefined}
       />
     </div>
   );

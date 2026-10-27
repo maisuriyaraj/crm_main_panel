@@ -11,7 +11,10 @@ import type {
   TeamInvitation,
   TeamMember,
   TeamMemberDetail,
+  PermissionModule,
+  RoleInput,
   TeamRole,
+  TeamRoleDetail,
   TeamRoleRef,
   TeamSummary,
 } from "@/lib/team/types";
@@ -70,6 +73,47 @@ export const mapRoleFromApi = (raw: any): TeamRole => ({
   isAdmin: raw.is_admin === true,
   rank: Number(raw.rank ?? 0),
   assignable: raw.assignable === true,
+  isSystem: raw.is_system === true,
+  systemKey: raw.system_key ?? null,
+  editable: raw.editable === true,
+  deletable: raw.deletable === true,
+  memberCount: Number(raw.member_count ?? 0),
+  pendingInvitationCount: Number(raw.pending_invitation_count ?? 0),
+  permissionCount: Number(raw.permission_count ?? 0),
+  version: Number(raw.version ?? 1),
+  updatedAt: optional(raw.updated_at),
+  permissions: Array.isArray(raw.permissions) ? raw.permissions : undefined,
+});
+
+const mapPerson = (raw: any) => (raw ? { id: toId(raw.id), fullName: raw.full_name } : undefined);
+
+export const mapRoleDetailFromApi = (raw: any): TeamRoleDetail => ({
+  ...mapRoleFromApi(raw),
+  permissions: Array.isArray(raw.permissions) ? raw.permissions : [],
+  createdBy: mapPerson(raw.created_by),
+  updatedBy: mapPerson(raw.updated_by),
+  createdAt: optional(raw.created_at),
+});
+
+export const mapPermissionCatalogFromApi = (raw: any): PermissionModule[] =>
+  (Array.isArray(raw?.modules) ? raw.modules : []).map((group: any) => ({
+    module: group.module,
+    label: group.label,
+    status: group.status === "planned" ? "planned" : "live",
+    permissions: (group.permissions ?? []).map((p: any) => ({
+      key: p.key,
+      label: p.label,
+      description: p.description ?? "",
+      requires: Array.isArray(p.requires) ? p.requires : [],
+      reserved: p.reserved === true,
+    })),
+  }));
+
+// Body for POST/PATCH /app/roles. The API rejects unknown fields, so only these go.
+export const roleInputToApi = (input: RoleInput) => ({
+  name: input.name,
+  description: input.description,
+  permissions: input.permissions,
 });
 
 export const mapInvitationFromApi = (raw: any): TeamInvitation => ({
@@ -136,10 +180,32 @@ export const mapTeamFieldErrors = (errors: TeamApiError["errors"], fields: Recor
 
 const nameOr = (value: string | null | undefined, fallback: string) => (value && value.trim() ? value : fallback);
 
+const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? "" : "s"}`;
+
+const describeRoleUpdate = (meta: Record<string, any>) => {
+  const parts: string[] = [];
+  if (meta.name) parts.push(`renamed it from ${meta.name.from} to ${meta.name.to}`);
+  if (meta.permissions) {
+    const added = meta.permissions.added?.length ?? 0;
+    const removed = meta.permissions.removed?.length ?? 0;
+    if (added) parts.push(`added ${plural(added, "permission")}`);
+    if (removed) parts.push(`removed ${plural(removed, "permission")}`);
+  }
+  if (meta.description_changed) parts.push("changed its description");
+  return parts.length ? ` (${parts.join(", ")})` : "";
+};
+
+const DENIED_ATTEMPTS: Record<string, string> = {
+  create_role: "creating a role",
+  update_role: "changing a role",
+  assign_role: "assigning a role",
+  change_role: "changing a role",
+};
+
 // One readable line per audit event for the Activity tab.
 export const describeAuditEvent = (event: TeamAuditEvent): string => {
   const actor = nameOr(event.actor?.fullName, event.actor ? "A former member" : "System");
-  const target = nameOr(event.target?.label, "a former member");
+  const target = nameOr(event.target?.label, event.targetType === "role" ? "a deleted role" : "a former member");
   const meta = event.metadata ?? {};
   const email = meta.email ?? target;
 
@@ -168,8 +234,16 @@ export const describeAuditEvent = (event: TeamAuditEvent): string => {
       return `${actor} signed ${target} out of all devices`;
     case "team.ownership.transferred":
       return `${actor} made ${target} an owner`;
+    case "team.role.created":
+      return `${actor} created the role ${target}`;
+    case "team.role.updated":
+      return `${actor} changed the role ${target}${describeRoleUpdate(meta)}`;
+    case "team.role.deleted":
+      return `${actor} deleted the role ${meta.name ?? target}`;
     case "team.authz.denied":
-      return `${actor} was blocked from an action on ${event.target?.label ?? "the team"}`;
+      return DENIED_ATTEMPTS[meta.attempted]
+        ? `${actor} was blocked from ${DENIED_ATTEMPTS[meta.attempted]}`
+        : `${actor} was blocked from an action on ${event.target?.label ?? "the team"}`;
     default:
       return `${actor} · ${event.action}`;
   }

@@ -50,6 +50,8 @@ export interface TeamSummary {
   seatsLimit: number | null;
 }
 
+// `assignable`, `editable` and `deletable` are worked out by the API for the
+// signed-in user, so screens only offer what the API will accept.
 export interface TeamRole {
   id: string;
   name: string;
@@ -58,6 +60,46 @@ export interface TeamRole {
   isAdmin: boolean;
   rank: number;
   assignable: boolean;
+  isSystem: boolean;
+  systemKey: string | null;
+  editable: boolean;
+  deletable: boolean;
+  memberCount: number;
+  pendingInvitationCount: number;
+  permissionCount: number;
+  version: number;
+  updatedAt?: string;
+  permissions?: string[];
+}
+
+export interface TeamRoleDetail extends TeamRole {
+  permissions: string[];
+  createdBy?: { id: string; fullName: string };
+  updatedBy?: { id: string; fullName: string };
+  createdAt?: string;
+}
+
+export interface PermissionDefinition {
+  key: string;
+  label: string;
+  description: string;
+  requires: string[];
+  // Owner and Admin only; never selectable for a custom role.
+  reserved: boolean;
+}
+
+export interface PermissionModule {
+  module: string;
+  label: string;
+  // "planned" modules have no screens yet; their permissions apply once they ship.
+  status: "live" | "planned";
+  permissions: PermissionDefinition[];
+}
+
+export interface RoleInput {
+  name: string;
+  description: string | null;
+  permissions: string[];
 }
 
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";

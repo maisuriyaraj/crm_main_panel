@@ -27,4 +27,4 @@
 
 - Never hardcode a route string in a component. Use the `pageRoutes` constants from `lib/constants.ts` with `next/navigation`'s `useRouter()` or `next/link`.
 - Any screen that requires a logged-in user (CRM features included) belongs under the `app/(app)/` route group, which already handles the auth guard, forced-password-reset redirect, and role-gated sidebar shell. Read auth state via the `useAuth()` hook (`hooks/useAuth.ts`), never a raw `useAppSelector` on `state.auth`. See `specs/auth/auth-flow.md` for the full design.
-- Gate UI with `useAuth().can("<module>.<action>")`, never by comparing role-name strings; the API enforces the same keys (see `../docs/specs/team-management-spec.md` §5).
+- Gate UI with `useAuth().can("<key>")` / `canAll([...])` or `<Can>`, using the key the API route checks; never compare role names or `isAdmin`. Without a module's `.view`, render `<NoAccess>` and fire no request. See `../mst_admin_crm/specs/docs/roles/spec.md` §7.4.

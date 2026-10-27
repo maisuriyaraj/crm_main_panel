@@ -5,12 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { endSession } from "@/lib/auth/session";
+import { setForbiddenListener } from "@/lib/axios";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToRefreshProfile } from "@/lib/store/slices/authSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const PROFILE_REFRESH_INTERVAL_MS = 60 * 1000;
+const FORBIDDEN_REFRESH_INTERVAL_MS = 5 * 1000;
 
 export function AuthGuard({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
@@ -31,20 +33,29 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   }, [dispatch, isAuthChecked]);
 
   // A role change made by an admin elsewhere reaches this tab's menus when
-  // the user comes back to it, at most once a minute.
+  // the user comes back to it (at most once a minute), or as soon as any
+  // module's API answers 403 FORBIDDEN (at most every few seconds, since one
+  // screen can fire several requests at once).
   const hasUser = !!user;
   useEffect(() => {
     if (!hasUser) return;
     let lastRefresh = Date.now();
 
-    const onFocus = () => {
-      if (document.visibilityState !== "visible" || Date.now() - lastRefresh < PROFILE_REFRESH_INTERVAL_MS) return;
+    const refresh = (minInterval: number) => {
+      if (Date.now() - lastRefresh < minInterval) return;
       lastRefresh = Date.now();
       dispatch(reqToRefreshProfile({ data: null }));
     };
+    const onFocus = () => {
+      if (document.visibilityState === "visible") refresh(PROFILE_REFRESH_INTERVAL_MS);
+    };
 
     document.addEventListener("visibilitychange", onFocus);
-    return () => document.removeEventListener("visibilitychange", onFocus);
+    setForbiddenListener(() => refresh(FORBIDDEN_REFRESH_INTERVAL_MS));
+    return () => {
+      document.removeEventListener("visibilitychange", onFocus);
+      setForbiddenListener(null);
+    };
   }, [dispatch, hasUser]);
 
   useEffect(() => {

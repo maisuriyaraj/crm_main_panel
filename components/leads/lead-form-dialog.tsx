@@ -91,7 +91,7 @@ const toFormValues = (lead: Lead): LeadFormValues => ({
 });
 
 interface LeadFormDialogProps {
-  trigger: React.ReactNode;
+  trigger?: React.ReactNode;
   mode: "create" | "edit";
   initialLead?: Lead;
   statuses: LeadStage[];
@@ -132,7 +132,7 @@ export function LeadFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
 
       <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>

@@ -66,13 +66,15 @@ interface KanbanBoardProps {
   statuses: LeadStage[];
   owners: LeadOwner[];
   onOpen: (leadId: string) => void;
-  onMoveLead: (leadId: string, newStatusId: string) => void;
+  // Absent when the user can't change stages: cards then don't drag.
+  onMoveLead?: (leadId: string, newStatusId: string) => void;
 }
 
 export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: KanbanBoardProps) {
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const noSensors = useSensors();
 
   // dnd-kit auto-scrolls every scrollable ancestor by default, which drags the
   // whole page around. Restrict it to the board so only the columns scroll.
@@ -98,7 +100,7 @@ export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: Kan
     const newStatusId = String(over.id);
     const lead = leads.find((l) => l.id === leadId);
     if (lead && lead.statusId !== newStatusId) {
-      onMoveLead(leadId, newStatusId);
+      onMoveLead?.(leadId, newStatusId);
     }
   };
 
@@ -106,7 +108,7 @@ export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: Kan
 
   return (
       <DndContext
-        sensors={sensors}
+        sensors={onMoveLead ? sensors : noSensors}
         autoScroll={autoScroll}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}

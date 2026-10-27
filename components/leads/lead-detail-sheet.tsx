@@ -43,13 +43,13 @@ interface LeadDetailSheetProps {
   owners: LeadOwner[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onEdit: (lead: Lead) => void;
-  onAddActivity: (leadId: string, values: { activityType: LeadActivityType; subject: string; description?: string }) => void;
-  onAddNote: (leadId: string, note: string) => void;
-  onUpdateNote: (noteId: string, note: string) => void;
-  onDeleteNote: (noteId: string) => void;
-  // Optional so the sheet still renders anywhere the caller has not wired
-  // conversion up. Hidden entirely when absent.
+  // Every write is optional: the caller passes only what the user's
+  // permissions allow, and each control is hidden when its handler is absent.
+  onEdit?: (lead: Lead) => void;
+  onAddActivity?: (leadId: string, values: { activityType: LeadActivityType; subject: string; description?: string }) => void;
+  onAddNote?: (leadId: string, note: string) => void;
+  onUpdateNote?: (noteId: string, note: string) => void;
+  onDeleteNote?: (noteId: string) => void;
   onConvert?: (lead: Lead) => void;
 }
 
@@ -81,7 +81,7 @@ export function LeadDetailSheet({
   const stage = statuses.find((s) => s.id === lead.statusId);
 
   const handleLogActivity = () => {
-    if (!activitySubject.trim()) return;
+    if (!activitySubject.trim() || !onAddActivity) return;
     onAddActivity(lead.id, {
       activityType,
       subject: activitySubject.trim(),
@@ -92,7 +92,7 @@ export function LeadDetailSheet({
   };
 
   const handleAddNote = () => {
-    if (!draftNote.trim()) return;
+    if (!draftNote.trim() || !onAddNote) return;
     onAddNote(lead.id, draftNote.trim());
     setDraftNote("");
   };
@@ -146,9 +146,11 @@ export function LeadDetailSheet({
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" onClick={() => onEdit(lead)}>
-              <Pencil className="h-3.5 w-3.5" /> Edit Lead
-            </Button>
+            {onEdit && (
+              <Button size="sm" variant="outline" onClick={() => onEdit(lead)}>
+                <Pencil className="h-3.5 w-3.5" /> Edit Lead
+              </Button>
+            )}
 
             {onConvert &&
               (lead.convertedContactId ? (
@@ -169,35 +171,37 @@ export function LeadDetailSheet({
             </TabsList>
 
             <TabsContent value="activity" className="space-y-3">
-              <div className="space-y-2 rounded-md border border-border p-3">
-                <div className="flex gap-2">
-                  <Select value={activityType} onValueChange={(v) => setActivityType(v as LeadActivityType)}>
-                    <SelectTrigger className="w-32">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACTIVITY_TYPES.map((type) => (
-                        <SelectItem key={type} value={type} className="capitalize">{type}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    value={activitySubject}
-                    onChange={(e) => setActivitySubject(e.target.value)}
-                    placeholder="Subject"
-                    className="flex-1"
+              {onAddActivity && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex gap-2">
+                    <Select value={activityType} onValueChange={(v) => setActivityType(v as LeadActivityType)}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ACTIVITY_TYPES.map((type) => (
+                          <SelectItem key={type} value={type} className="capitalize">{type}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      value={activitySubject}
+                      onChange={(e) => setActivitySubject(e.target.value)}
+                      placeholder="Subject"
+                      className="flex-1"
+                    />
+                  </div>
+                  <Textarea
+                    value={activityDescription}
+                    onChange={(e) => setActivityDescription(e.target.value)}
+                    placeholder="Details (optional)"
+                    rows={2}
                   />
+                  <Button size="sm" onClick={handleLogActivity} disabled={!activitySubject.trim()}>
+                    Log Activity
+                  </Button>
                 </div>
-                <Textarea
-                  value={activityDescription}
-                  onChange={(e) => setActivityDescription(e.target.value)}
-                  placeholder="Details (optional)"
-                  rows={2}
-                />
-                <Button size="sm" onClick={handleLogActivity} disabled={!activitySubject.trim()}>
-                  Log Activity
-                </Button>
-              </div>
+              )}
 
               <ul className="space-y-3">
                 {sortedActivities.map((activity) => (
@@ -221,17 +225,19 @@ export function LeadDetailSheet({
             </TabsContent>
 
             <TabsContent value="notes" className="space-y-3">
-              <div className="space-y-2 rounded-md border border-border p-3">
-                <Textarea
-                  value={draftNote}
-                  onChange={(e) => setDraftNote(e.target.value)}
-                  placeholder="Write a note..."
-                  rows={2}
-                />
-                <Button size="sm" onClick={handleAddNote} disabled={!draftNote.trim()}>
-                  Add Note
-                </Button>
-              </div>
+              {onAddNote && (
+                <div className="space-y-2 rounded-md border border-border p-3">
+                  <Textarea
+                    value={draftNote}
+                    onChange={(e) => setDraftNote(e.target.value)}
+                    placeholder="Write a note..."
+                    rows={2}
+                  />
+                  <Button size="sm" onClick={handleAddNote} disabled={!draftNote.trim()}>
+                    Add Note
+                  </Button>
+                </div>
+              )}
 
               <ul className="space-y-3">
                 {sortedNotes.map((note) => (
@@ -247,7 +253,7 @@ export function LeadDetailSheet({
                           <Button
                             size="sm"
                             onClick={() => {
-                              onUpdateNote(note.id, editingNoteText.trim());
+                              onUpdateNote?.(note.id, editingNoteText.trim());
                               setEditingNoteId(null);
                             }}
                             disabled={!editingNoteText.trim()}
@@ -267,25 +273,31 @@ export function LeadDetailSheet({
                             {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })}
                           </span>
                           <div className="flex gap-1">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() => {
-                                setEditingNoteId(note.id);
-                                setEditingNoteText(note.note);
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() => onDeleteNote(note.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            {onUpdateNote && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                aria-label="Edit note"
+                                onClick={() => {
+                                  setEditingNoteId(note.id);
+                                  setEditingNoteText(note.note);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
+                            {onDeleteNote && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                aria-label="Delete note"
+                                onClick={() => onDeleteNote(note.id)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </>

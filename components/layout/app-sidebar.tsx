@@ -2,26 +2,12 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import {
-  Building2,
-  Briefcase,
-  ChevronRight,
-  LayoutDashboard,
-  Megaphone,
-  Moon,
-  Rocket,
-  SquareCheck,
-  Sun,
-  TrendingUp,
-  UserPlus,
-  Users,
-  UsersRound,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronRight, Moon, Rocket, Sun } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
-import { buildOrgRoute, pageRoutes, SITE_NAME } from "@/lib/constants";
+import { buildOrgRoute, SITE_NAME } from "@/lib/constants";
+import { isNavParent, navGroups, visibleNavGroups, type NavParent } from "@/lib/navigation";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -40,73 +26,6 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-
-type NavLink = {
-  label: string;
-  icon: LucideIcon;
-  href: string;
-};
-
-type NavSubLink = {
-  label: string;
-  href: string;
-};
-
-type NavParent = {
-  label: string;
-  icon: LucideIcon;
-  children: NavSubLink[];
-};
-
-type NavEntry = NavLink | NavParent;
-
-type NavGroupConfig = {
-  label: string;
-  // Hides the group unless /me grants this permission. UX only; the API is
-  // the real gate.
-  permission?: string;
-  items: NavEntry[];
-};
-
-const navGroups: NavGroupConfig[] = [
-  {
-    label: "Workspace",
-    items: [
-      { label: "Dashboard", icon: LayoutDashboard, href: pageRoutes.dashboard },
-      { label: "Leads", icon: UserPlus, href: pageRoutes.leads },
-      { label: "Contacts", icon: Users, href: pageRoutes.contacts },
-      { label: "Companies", icon: Building2, href: pageRoutes.companies },
-      { label: "Deals", icon: Briefcase, href: pageRoutes.deals },
-      { label: "Tasks", icon: SquareCheck, href: pageRoutes.tasks },
-    ],
-  },
-  {
-    label: "Growth",
-    items: [
-      {
-        label: "Ads Manager",
-        icon: Megaphone,
-        children: [
-          { label: "Overview", href: pageRoutes.adsManagerOverview },
-          { label: "Campaigns", href: pageRoutes.adsManagerCampaigns },
-          { label: "Analytics", href: pageRoutes.adsManagerAnalytics },
-          { label: "Assets", href: pageRoutes.adsManagerAssets },
-          { label: "Account Center", href: pageRoutes.adsManagerAccountCenter },
-        ],
-      },
-      { label: "Growth", icon: TrendingUp, href: pageRoutes.growth },
-    ],
-  },
-  {
-    label: "Organization",
-    permission: "team.view",
-    items: [{ label: "Team", icon: UsersRound, href: pageRoutes.settingsTeam }],
-  },
-];
-
-function isNavParent(item: NavEntry): item is NavParent {
-  return "children" in item;
-}
 
 export function AppSidebar() {
   const pathname = usePathname();
@@ -131,44 +50,38 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {navGroups.map((group) => {
-          if (group.permission && !can(group.permission)) {
-            return null;
-          }
-
-          return (
-            <SidebarGroup key={group.label}>
-              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {group.items.map((item) =>
-                    isNavParent(item) ? (
-                      <AdsManagerNavItem
-                        key={item.label}
-                        item={item}
-                        buildHref={buildHref}
-                        isActive={isActive}
-                      />
-                    ) : (
-                      <SidebarMenuItem key={item.label}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={isActive(buildHref(item.href))}
-                          tooltip={item.label}
-                        >
-                          <Link href={buildHref(item.href)}>
-                            <item.icon />
-                            <span>{item.label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ),
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          );
-        })}
+        {visibleNavGroups(navGroups, can).map((group) => (
+          <SidebarGroup key={group.label}>
+            <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) =>
+                  isNavParent(item) ? (
+                    <AdsManagerNavItem
+                      key={item.label}
+                      item={item}
+                      buildHref={buildHref}
+                      isActive={isActive}
+                    />
+                  ) : (
+                    <SidebarMenuItem key={item.label}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(buildHref(item.href))}
+                        tooltip={item.label}
+                      >
+                        <Link href={buildHref(item.href)}>
+                          <item.icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ),
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
 
       <SidebarFooter>

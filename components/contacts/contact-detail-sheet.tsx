@@ -24,13 +24,16 @@ interface ContactDetailSheetProps {
   notes: ContactNote[];
   notesLoading: boolean;
   currentUserId?: string;
-  isAdmin: boolean;
+  // contacts.notes.manage: may change other people's notes.
+  canManageNotes: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onEdit: (contact: Contact) => void;
-  onAddNote: (note: string) => void;
-  onUpdateNote: (noteId: string, note: string) => void;
-  onDeleteNote: (noteId: string) => void;
+  // Writes are optional: the caller passes only what the user's permissions
+  // allow, and each control is hidden when its handler is absent.
+  onEdit?: (contact: Contact) => void;
+  onAddNote?: (note: string) => void;
+  onUpdateNote?: (noteId: string, note: string) => void;
+  onDeleteNote?: (noteId: string) => void;
 }
 
 const Field = ({ label, value }: { label: string; value?: string }) => (
@@ -46,7 +49,7 @@ export function ContactDetailSheet({
   notes,
   notesLoading,
   currentUserId,
-  isAdmin,
+  canManageNotes,
   open,
   onOpenChange,
   onEdit,
@@ -60,20 +63,21 @@ export function ContactDetailSheet({
 
   if (!contact) return null;
 
-  // Mirrors the server rule: a note may be changed by its author or an org admin.
+  // Mirrors the server rule: contacts.update, plus being the author or
+  // holding contacts.notes.manage.
   const canMutateNote = (note: ContactNote) =>
-    isAdmin || (!!currentUserId && note.createdBy === currentUserId);
+    !!onUpdateNote && !!onDeleteNote && (canManageNotes || (!!currentUserId && note.createdBy === currentUserId));
 
   const submitNote = () => {
     const value = draft.trim();
-    if (!value) return;
+    if (!value || !onAddNote) return;
     onAddNote(value);
     setDraft("");
   };
 
   const submitEdit = (noteId: string) => {
     const value = editDraft.trim();
-    if (!value) return;
+    if (!value || !onUpdateNote) return;
     onUpdateNote(noteId, value);
     setEditingNoteId(null);
     setEditDraft("");
@@ -89,12 +93,14 @@ export function ContactDetailSheet({
               ? `${contact.designation} at ${contact.companyName}`
               : contact.companyName ?? contact.designation ?? "Contact"}
           </SheetDescription>
-          <div className="flex gap-2 pt-2">
-            <Button size="sm" variant="outline" onClick={() => onEdit(contact)}>
-              <Pencil className="mr-2 h-3.5 w-3.5" />
-              Edit
-            </Button>
-          </div>
+          {onEdit && (
+            <div className="flex gap-2 pt-2">
+              <Button size="sm" variant="outline" onClick={() => onEdit(contact)}>
+                <Pencil className="mr-2 h-3.5 w-3.5" />
+                Edit
+              </Button>
+            </div>
+          )}
         </SheetHeader>
 
         <Separator />
@@ -138,17 +144,19 @@ export function ContactDetailSheet({
         <div className="flex flex-col gap-3 p-6">
           <p className="text-sm font-medium">Notes</p>
 
-          <div className="flex flex-col gap-2">
-            <Textarea
-              rows={3}
-              placeholder="Add a note..."
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <Button size="sm" className="self-end" onClick={submitNote} disabled={!draft.trim()}>
-              Add Note
-            </Button>
-          </div>
+          {onAddNote && (
+            <div className="flex flex-col gap-2">
+              <Textarea
+                rows={3}
+                placeholder="Add a note..."
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+              />
+              <Button size="sm" className="self-end" onClick={submitNote} disabled={!draft.trim()}>
+                Add Note
+              </Button>
+            </div>
+          )}
 
           {notesLoading ? (
             <div className="flex flex-col gap-2">
@@ -202,7 +210,7 @@ export function ContactDetailSheet({
                               size="icon"
                               variant="ghost"
                               className="h-7 w-7"
-                              onClick={() => onDeleteNote(note.id)}
+                              onClick={() => onDeleteNote?.(note.id)}
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>

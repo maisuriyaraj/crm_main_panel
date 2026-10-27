@@ -39,6 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RoleSelectItems } from "@/components/team/role-select-items";
 
 export type MemberDialogType =
   | "change_role"
@@ -149,10 +150,12 @@ export function ChangeRoleDialog({ member, onClose, onDone }: DialogProps) {
   const { isPending, error, callbacks } = useMemberAction(onClose, onDone);
   const [roleId, setRoleId] = useState(member.role?.id ?? "");
 
-  const assignable = roles.filter((role) => role.assignable);
   const current = roles.find((role) => role.id === member.role?.id);
   const next = roles.find((role) => role.id === roleId);
-  const isDemotion = !!current && !!next && next.rank < current.rank && current.isAdmin;
+  // What the member would lose, from the two roles' actual permissions.
+  const lost = current?.permissions && next?.permissions && next.id !== current.id
+    ? current.permissions.filter((key) => !next.permissions?.includes(key))
+    : [];
 
   return (
     <ConfirmShell
@@ -180,16 +183,13 @@ export function ChangeRoleDialog({ member, onClose, onDone }: DialogProps) {
             <SelectValue placeholder="Choose a role" />
           </SelectTrigger>
           <SelectContent>
-            {assignable.map((role) => (
-              <SelectItem key={role.id} value={role.id}>
-                {role.label}
-              </SelectItem>
-            ))}
+            <RoleSelectItems roles={roles} />
           </SelectContent>
         </Select>
-        {isDemotion && (
+        {lost.length > 0 && (
           <p className="text-xs text-destructive">
-            {member.fullName} will lose {current?.label} access, including team management.
+            {member.fullName} will lose {lost.length} permission{lost.length === 1 ? "" : "s"} they have now
+            {lost.some((key) => key.startsWith("team.") || key === "roles.manage") ? ", including team management" : ""}.
           </p>
         )}
       </div>

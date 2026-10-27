@@ -46,14 +46,14 @@ in the browser (`07-gotchas.md` #11).
 
 | Action | Thunk | Gated |
 |---|---|---|
-| Create / edit | `reqToCreateContact`, `reqToUpdateContact` | no |
+| Create / edit | `reqToCreateContact`, `reqToUpdateContact` | `can("contacts.create")` / `can("contacts.update")` — controls hidden |
 | Delete | `reqToDeleteContact` | `can("contacts.delete")` — control hidden |
 | Bulk delete / reassign | `reqToBulkDeleteContacts`, `reqToBulkUpdateContacts` | `can("contacts.bulk")` — selection column and bulk bar hidden |
-| Add / edit / delete note | `reqToCreateContactNote`, `reqToUpdateContactNote`, `reqToDeleteContactNote` | note controls shown only to the author or an admin |
+| Add / edit / delete note | `reqToCreateContactNote`, `reqToUpdateContactNote`, `reqToDeleteContactNote` | `can("contacts.update")`; edit/delete also need authorship or `can("contacts.notes.manage")` |
 
 Controls are gated with `can(permission)` from `useAuth`, using the permission list `/me`
-returns (see `docs/specs/team-management-spec.md` §5). Note controls still use `isAdmin`, because the
-backend's note rule is author-or-admin. Row selection is page-scoped and clears whenever the
+returns (see the roles spec, §7.4). Without `contacts.view` the page shows a no-access notice and
+sends no request. Row selection is page-scoped and clears whenever the
 visible rows change. An owner id missing from the active-member list renders as "Inactive member".
 
 ### Empty states
@@ -150,17 +150,19 @@ notes.
 
 | Action | Thunk | Endpoint | Gated |
 |---|---|---|---|
-| Create lead | `reqToCreateLead` | `POST /api/leads` | no |
-| Edit lead | `reqToUpdateLead` | `PATCH /api/leads/:id` | no |
-| Drag card between columns | `reqToChangeLeadStage` | `PATCH /api/leads/:id/stage` | no |
+| Create lead | `reqToCreateLead` | `POST /api/leads` | `can("leads.create")` |
+| Edit lead | `reqToUpdateLead` | `PATCH /api/leads/:id` | `can("leads.update")` |
+| Drag card between columns | `reqToChangeLeadStage` | `PATCH /api/leads/:id/stage` | `can("leads.update")` (cards don't drag without it) |
 | Delete lead | `reqToDeleteLead` | `DELETE /api/leads/:id` | `can("leads.delete")` |
 | Bulk delete | `reqToBulkDeleteLeads` | `DELETE /api/leads/bulk` | `can("leads.bulk")` |
 | Bulk stage / owner change | `reqToBulkUpdateLeads` | `PATCH /api/leads/bulk` | `can("leads.bulk")` |
-| Add activity | `reqToAddLeadActivity` | `POST /api/leads/:id/activities` | no |
-| Add / edit / delete note | `reqToCreateLeadNote`, `reqToUpdateLeadNote`, `reqToDeleteLeadNote` | `/api/leads/notes` paths | no |
+| Add activity | `reqToAddLeadActivity` | `POST /api/leads/:id/activities` | `can("leads.update")` |
+| Add / edit / delete note | `reqToCreateLeadNote`, `reqToUpdateLeadNote`, `reqToDeleteLeadNote` | `/api/leads/notes` paths | `can("leads.update")` |
+| Convert to contact | `reqToConvertLead` | `POST /api/leads/:id/convert` | `canAll(["leads.update", "contacts.create"])` |
 
-Gating uses `can("leads.delete")` / `can("leads.bulk")` from the `useAuth` hook. Roles without
-them get **hidden controls**, not disabled ones — the bulk action bar and delete control are not
+Gating uses `can` / `canAll` from the `useAuth` hook, with the same key the route checks. Without
+`leads.view` the page shows a no-access notice and sends no request. Roles without a key
+get **hidden controls**, not disabled ones — the bulk action bar and delete control are not
 rendered at all. The server independently rejects these calls (`03-business-rules.md` R-24), so
 this is defence in depth rather than the only barrier.
 

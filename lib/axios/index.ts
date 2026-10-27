@@ -19,6 +19,14 @@ const REFRESHABLE_CODES = ["TOKEN_EXPIRED", "TOKEN_MISSING"];
 
 type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 
+// A 403 FORBIDDEN means the caller's role changed since /me was read. The
+// AuthGuard registers a listener that re-reads /me so menus and buttons catch
+// up; kept as a callback because the store imports this module.
+let forbiddenListener: (() => void) | null = null;
+export const setForbiddenListener = (listener: (() => void) | null) => {
+    forbiddenListener = listener;
+};
+
 Axios.interceptors.request.use((config) => {
     if (isSessionEnded()) {
         return Promise.reject(new axios.CanceledError("Session ended"));
@@ -46,6 +54,14 @@ Axios.interceptors.response.use(
     (response) => response,
     async (error: AxiosError<{ code?: string }>) => {
         const originalRequest = error.config as RetriableConfig | undefined;
+
+        if (
+            error.response?.status === 403 &&
+            error.response.data?.code === "FORBIDDEN" &&
+            originalRequest?.url !== apiRoutes.me
+        ) {
+            forbiddenListener?.();
+        }
 
         if (
             !originalRequest ||

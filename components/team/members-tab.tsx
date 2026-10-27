@@ -57,11 +57,13 @@ interface MembersTabProps {
   orgName: string;
   version: number;
   canInvite: boolean;
+  // Preselects the role filter, e.g. from a role's "View members" link.
+  roleFilter?: string;
   onInvite: () => void;
   onChanged: () => void;
 }
 
-export function MembersTab({ orgName, version, canInvite, onInvite, onChanged }: MembersTabProps) {
+export function MembersTab({ orgName, version, canInvite, roleFilter: requestedRole, onInvite, onChanged }: MembersTabProps) {
   const dispatch = useAppDispatch();
   const handleFailure = useTeamFailure();
   const { users, pagination, isLoading, error } = useAppSelector((state) => state.orgUsers);
@@ -70,7 +72,9 @@ export function MembersTab({ orgName, version, canInvite, onInvite, onChanged }:
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(ALL);
-  const [roleFilter, setRoleFilter] = useState(ALL);
+  // The parent remounts this tab when `roleFilter` changes, so it only seeds
+  // the initial value.
+  const [roleFilter, setRoleFilter] = useState(requestedRole ?? ALL);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDirection }>({ key: "created_at", dir: "desc" });
 
