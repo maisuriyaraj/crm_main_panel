@@ -25,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/auth/password-input";
 import { AuthSplit } from "@/components/layout/public/AuthSplit";
-import { PublicLayout } from "@/components/layout/public/PublicLayout";
+import { AuthLayout } from "@/components/layout/public/AuthLayout";
 
 const signInSchema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
@@ -92,7 +92,7 @@ function LoginForm() {
   };
 
   return (
-    <PublicLayout>
+    <AuthLayout>
       <AuthSplit
         eyebrow="Welcome back"
         title={<>Your growth hub, <span className="text-gradient">all in one place</span></>}
@@ -183,6 +183,6 @@ function LoginForm() {
           </Link>
         </div>
       </AuthSplit>
-    </PublicLayout>
+    </AuthLayout>
   );
 }

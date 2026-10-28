@@ -3,7 +3,7 @@
 import { CalendarCheck, Clock, MessagesSquare, ShieldCheck, Workflow } from "lucide-react";
 import BookDemoForm from "@/components/booking/BookDemoForm";
 import { AuthSplit } from "@/components/layout/public/AuthSplit";
-import { PublicLayout } from "@/components/layout/public/PublicLayout";
+import { AuthLayout } from "@/components/layout/public/AuthLayout";
 
 const HIGHLIGHTS = [
     { icon: Clock, title: "30 minute live walkthrough", text: "A focused tour of the parts that matter to you." },
@@ -16,7 +16,7 @@ const STEPS = ["Pick a time that suits you", "We confirm and send the meeting li
 
 export default function BookDemo() {
     return (
-        <PublicLayout>
+        <AuthLayout>
             <AuthSplit
                 eyebrow="Free personalized demo"
                 title={<>See OrbitOps <span className="text-gradient">in action</span></>}
@@ -59,6 +59,6 @@ export default function BookDemo() {
             >
                 <BookDemoForm />
             </AuthSplit>
-        </PublicLayout>
+        </AuthLayout>
     );
 }

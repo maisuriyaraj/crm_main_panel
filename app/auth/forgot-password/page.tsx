@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { AuthSplit } from "@/components/layout/public/AuthSplit";
-import { PublicLayout } from "@/components/layout/public/PublicLayout";
+import { AuthLayout } from "@/components/layout/public/AuthLayout";
 
 const forgotSchema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email").max(255),
@@ -44,7 +44,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <PublicLayout>
+    <AuthLayout>
       <AuthSplit
         eyebrow="Account recovery"
         title={<>Forgot your <span className="text-gradient">password?</span></>}
@@ -106,6 +106,6 @@ export default function ForgotPasswordPage() {
           <ArrowLeft className="size-4" aria-hidden /> Back to sign in
         </Link>
       </AuthSplit>
-    </PublicLayout>
+    </AuthLayout>
   );
 }

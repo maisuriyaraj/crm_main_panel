@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { PasswordInput } from "@/components/auth/password-input";
 import { AuthSplit } from "@/components/layout/public/AuthSplit";
-import { PublicLayout } from "@/components/layout/public/PublicLayout";
+import { AuthLayout } from "@/components/layout/public/AuthLayout";
 
 type ResetValues = z.infer<typeof newPasswordPairSchema>;
 
@@ -67,7 +67,7 @@ export default function ResetFromEmailPage() {
   };
 
   return (
-    <PublicLayout>
+    <AuthLayout>
       <AuthSplit
         eyebrow="Account recovery"
         title={<>Choose a <span className="text-gradient">new password</span></>}
@@ -137,6 +137,6 @@ export default function ResetFromEmailPage() {
           <ArrowLeft className="size-4" aria-hidden /> Back to sign in
         </Link>
       </AuthSplit>
-    </PublicLayout>
+    </AuthLayout>
   );
 }

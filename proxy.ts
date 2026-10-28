@@ -114,6 +114,7 @@ export const config = {
         // cover every /{organizationId}/* screen also matches paths like
         // /_next/static/css/*.css (its first segment looks like an org id),
         // which then get redirected instead of served.
-        "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+        // Social crawlers fetch the preview image signed-out, so it must be excluded too.
+        "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt|opengraph-image).*)",
     ],
 };

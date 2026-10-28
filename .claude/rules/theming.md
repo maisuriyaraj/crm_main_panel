@@ -15,7 +15,7 @@ Available semantic tokens: `background`, `foreground`, `card` (+ `-foreground`),
 
 ## Spacing & radius
 
-- `--radius: 0.875rem` is the base; `--radius-sm` through `--radius-4xl` are derived from it in `@theme inline`. Use the Tailwind radius utilities (`rounded-lg`, `rounded-2xl`, etc.), not hardcoded pixel/rem radius values.
+- `--radius: 0.375rem` (6px) is the base; `--radius-sm` through `--radius-4xl` are derived from it in `@theme inline`. Use the Tailwind radius utilities (`rounded-lg`, `rounded-2xl`, etc.), not hardcoded pixel/rem radius values.
 
 ## Custom utilities (`@utility` in globals.css)
 

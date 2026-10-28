@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { pageRoutes } from "@/lib/constants";
 import { PublicLayout } from "@/components/layout/public/PublicLayout";
 import type { PricingPlan } from "@/lib/pricing/getPricingPlans";
+import { ProductScreens } from "@/components/home/ProductScreens";
 
 const features = [
   { icon: Users, title: "CRM Management", tone: "text-primary bg-primary/10", items: ["Lead Management", "Contact Management", "Activity Tracking", "Notes & Attachments"] },
@@ -67,11 +68,6 @@ const solutionProblems = [
 const platformChecks = ["One customer timeline", "No-code automation", "Live revenue intelligence", "Cross-channel attribution"];
 
 const customer360Stats = ["$18.4K LTV", "12 activities", "4 open deals"];
-
-const screenTabs = ["CRM Dashboard", "Sales Pipeline", "Lead Management", "Analytics", "Ads Dashboard", "Billing"];
-const screenLabels = ["CRM Dashboard", "Sales Pipeline", "Lead Management", "Analytics Dashboard", "Ads Dashboard", "Billing Overview"];
-const screenSkeletonWidths = [70, 92, 60, 82, 48];
-const screenBarHeights = [25, 48, 35, 62, 51, 76, 65, 88, 70, 95];
 
 const howItWorksSteps = [
   { title: "Capture Leads", desc: "From every channel" },
@@ -187,7 +183,7 @@ function Dashboard() {
 }
 
 export default function LandingPage({ pricingPlans }: { pricingPlans: PricingPlan[] }) {
-  const [faq, setFaq] = useState(0); const [screen, setScreen] = useState(0);
+  const [faq, setFaq] = useState(0);
   const router = useRouter();
 
   const goToBookTrial = () => {
@@ -283,43 +279,7 @@ export default function LandingPage({ pricingPlans }: { pricingPlans: PricingPla
 
       <section className="bg-secondary/50 px-5 py-24">
         <SectionHeading eyebrow="See OrbitOps in action" title="A command center for your business" copy="Purpose-built workspaces give every team focus—without sacrificing the complete picture." />
-        <div className="mx-auto max-w-6xl">
-          <div className="mb-6 flex gap-2 overflow-x-auto pb-2">
-            {screenTabs.map((x, i) => <Button key={x} onClick={() => setScreen(i)} variant={screen === i ? "default" : "ghost"} className="shrink-0 rounded-full">{x}</Button>)}
-          </div>
-          <div key={screen} className="overflow-hidden rounded-2xl border bg-card panel-shadow">
-            <div className="flex h-12 items-center gap-2 border-b px-5">
-              <span className="size-2.5 rounded-full bg-destructive" />
-              <span className="size-2.5 rounded-full bg-lime-400" />
-              <span className="size-2.5 rounded-full bg-emerald-500" />
-              <span className="ml-4 text-xs text-muted-foreground">{screenLabels[screen]}</span>
-            </div>
-            <div className="grid min-h-[420px] gap-4 p-5 md:grid-cols-[1fr_2fr]">
-              <div className="rounded-xl bg-secondary p-5">
-                <div className="h-3 w-24 rounded bg-foreground/15" />
-                <div className="mt-7 space-y-3">
-                  {screenSkeletonWidths.map((w, i) => (
-                    <div key={`skeleton-${i}-${w}`} className="rounded-xl border bg-card p-3">
-                      <div className="h-2 rounded bg-primary/20" style={{ width: `${w}%` }} />
-                      <div className="mt-2 h-2 w-1/2 rounded bg-muted" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-xl border p-5">
-                <div className="mb-8 flex justify-between">
-                  <div><small className="text-muted-foreground">Performance</small><p className="text-2xl font-bold">$284,840</p></div>
-                  <span className="h-fit rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-600">+24.8%</span>
-                </div>
-                <div className="flex h-60 items-end gap-3">
-                  {screenBarHeights.map((h, i) => (
-                    <div key={`screen-bar-${i}-${h}`} className="flex-1 rounded-t-md bg-primary" style={{ height: `${h}%`, opacity: .35 + i * .06 }} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProductScreens />
       </section>
 
       <section id="how-it-works" className="px-5 py-24">

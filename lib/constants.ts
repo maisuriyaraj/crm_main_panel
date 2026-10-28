@@ -36,6 +36,10 @@ export const buildOrgRoute = (orgSlug: string, route: string) => `/${orgSlug}${r
 // local backend for development. The API mounts every route under /api.
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/";
 
+// Public origin of this site. Social previews, canonical links and the sitemap
+// need absolute URLs, so set this to the real domain in production.
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 // Full URL for an apiRoutes path, for callers outside the shared Axios client.
 // Plain concatenation turned ".../api/" + "/auth/logout" into "//auth/logout",
 // which the API answers with 404 — logout then silently did nothing.
