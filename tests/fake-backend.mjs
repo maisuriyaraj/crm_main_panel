@@ -45,6 +45,7 @@ export const createFakeBackend = () => {
             return reply(config, 401, { message: "Invalid token", code: "TOKEN_EXPIRED" });
         }
         if (state.access === "invalid") return reply(config, 401, { message: "Invalid token", code: "TOKEN_INVALID" });
+        if (state.access === "revoked") return reply(config, 401, { message: "Your session has ended", code: "SESSION_REVOKED" });
         if (state.access === "forbidden") return reply(config, 403, { message: "Admin permission required" });
 
         return reply(config, 200, { ok: true, url });

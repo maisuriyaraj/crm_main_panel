@@ -63,6 +63,13 @@ Axios.interceptors.response.use(
             forbiddenListener?.();
         }
 
+        // The server ended this session (logout elsewhere, password change,
+        // suspension). A refresh can't revive it, so leave right away.
+        if (error.response?.status === 401 && error.response.data?.code === "SESSION_REVOKED") {
+            void endSession();
+            return Promise.reject(error);
+        }
+
         if (
             !originalRequest ||
             error.response?.status !== 401 ||

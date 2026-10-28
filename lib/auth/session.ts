@@ -84,7 +84,11 @@ export const clearClientSession = () => {
 //
 // "expired": cleanup happens first, then the user acknowledges a notice and
 // goes to signin. "logout": the user asked for it, so straight to "/".
-export const endSession = async (reason: SessionEndReason = "expired") => {
+//
+// The other tabs of this browser share the same cookies, so they are told
+// too and run the same local cleanup — without calling the API again or
+// re-broadcasting (`fromOtherTab`).
+export const endSession = async (reason: SessionEndReason = "expired", { fromOtherTab = false } = {}) => {
     if (sessionEnded) return;
     sessionEnded = true;
 
@@ -93,17 +97,20 @@ export const endSession = async (reason: SessionEndReason = "expired") => {
     // navigation completes.
     listeners.forEach((listener) => listener());
 
-    try {
-        // Raw axios, not the shared instance, so this can never re-enter the
-        // refresh interceptor. The backend clears the HttpOnly cookies here.
-        await axios.post(apiUrl(apiRoutes.logout), null, {
-            withCredentials: true,
-            timeout: 5000,
-        });
-    } catch {
-        // Best effort: if the API is unreachable the cookies may linger, but
-        // they can't loop us — the session hint alone never forces a redirect
-        // without the `user` cookie cleared below.
+    if (!fromOtherTab) {
+        announceToOtherTabs(reason);
+        try {
+            // Raw axios, not the shared instance, so this can never re-enter the
+            // refresh interceptor. The backend clears the HttpOnly cookies here.
+            await axios.post(apiUrl(apiRoutes.logout), null, {
+                withCredentials: true,
+                timeout: 5000,
+            });
+        } catch {
+            // Best effort: if the API is unreachable the cookies may linger, but
+            // they can't loop us — the session hint alone never forces a redirect
+            // without the `user` cookie cleared below.
+        }
     }
 
     clearClientSession();
@@ -113,12 +120,70 @@ export const endSession = async (reason: SessionEndReason = "expired") => {
     // A full navigation also drops every bit of in-memory user state.
     const redirect = (path: string) => () => window.location.replace(path);
 
+    const signinTarget = signinWithReturnPath();
+
     // Without a mounted notice there's no one to acknowledge it, so redirect
     // right away rather than leave the user on a blank page.
     if (reason === "expired" && expiredNoticeHandler) {
-        expiredNoticeHandler(redirect(pageRoutes.signin));
+        expiredNoticeHandler(redirect(signinTarget));
         return;
     }
 
-    redirect(reason === "expired" ? pageRoutes.signin : pageRoutes.home)();
+    redirect(reason === "expired" ? signinTarget : pageRoutes.home)();
 };
+
+// After an expiry, sign-in sends the user back to the workspace page they
+// were on (the sign-in page only honours same-org paths).
+const signinWithReturnPath = () => {
+    const path = typeof window !== "undefined" ? window.location.pathname : undefined;
+    if (!path || path === "/" || path.startsWith("/auth/")) return pageRoutes.signin;
+    return `${pageRoutes.signin}?redirect=${encodeURIComponent(`${path}${window.location.search || ""}`)}`;
+};
+
+// ─── Cross-tab sign-out ──────────────────────────────────────────────────────
+
+const CHANNEL_NAME = "orbitops-auth";
+const STORAGE_SIGNAL_KEY = "orbitops-auth-signal";
+
+type TabMessage = { type: "session-ended"; reason: SessionEndReason };
+
+const isTabMessage = (value: unknown): value is TabMessage =>
+    !!value && (value as TabMessage).type === "session-ended"
+    && ((value as TabMessage).reason === "expired" || (value as TabMessage).reason === "logout");
+
+const channel: BroadcastChannel | null =
+    typeof window !== "undefined" && typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(CHANNEL_NAME) : null;
+
+// Node's BroadcastChannel keeps the process alive; browsers have no unref.
+(channel as unknown as { unref?: () => void } | null)?.unref?.();
+
+const announceToOtherTabs = (reason: SessionEndReason) => {
+    const message: TabMessage = { type: "session-ended", reason };
+    if (channel) {
+        channel.postMessage(message);
+        return;
+    }
+    // Fallback for browsers without BroadcastChannel: a storage write fires a
+    // `storage` event in every other tab of this origin.
+    try {
+        localStorage.setItem(STORAGE_SIGNAL_KEY, JSON.stringify({ ...message, at: Date.now() }));
+    } catch {
+        // Storage unavailable: other tabs find out on their next API call.
+    }
+};
+
+if (channel) {
+    channel.onmessage = (event: MessageEvent) => {
+        if (isTabMessage(event.data)) void endSession(event.data.reason, { fromOtherTab: true });
+    };
+} else if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("storage", (event: StorageEvent) => {
+        if (event.key !== STORAGE_SIGNAL_KEY || !event.newValue) return;
+        try {
+            const message = JSON.parse(event.newValue);
+            if (isTabMessage(message)) void endSession(message.reason, { fromOtherTab: true });
+        } catch {
+            // Not ours or malformed: ignore.
+        }
+    });
+}
