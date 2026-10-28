@@ -5,6 +5,6 @@
 - Never hardcode an API path in a component or a thunk. Add it to `apiRoutes` in `lib/constants.ts` and reference the constant (see `reqToBookADemo`).
 - For the request/response contract each thunk follows, see `.claude/rules/state-management.md`.
 
-## Known issue — do not copy this pattern
+## Base URL
 
-`lib/axios/index.ts` hardcodes `baseURL: "http://localhost:5000"`. The `.env` file defines `API_URL` for this exact purpose, but nothing in the app currently reads it. If you touch this file, flag this to the developer rather than silently hardcoding another URL elsewhere.
+`NEXT_PUBLIC_API_URL` (e.g. `http://localhost:5000/api/`) is the API root; `lib/axios` uses it as `baseURL`. Anything that builds a full URL outside the shared client (raw `axios`, server `fetch`) must use `apiUrl(apiRoutes.x)` from `lib/constants.ts`. Never concatenate `API_BASE_URL + path`: the double slash it produces 404s.

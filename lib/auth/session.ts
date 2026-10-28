@@ -1,5 +1,5 @@
 import axios from "axios";
-import { API_BASE_URL, apiRoutes, pageRoutes } from "@/lib/constants";
+import { apiRoutes, apiUrl, pageRoutes } from "@/lib/constants";
 import { handleCookieActions } from "@/lib/commonFunctions";
 
 // Device preferences that aren't tied to who is signed in survive a logout.
@@ -79,7 +79,7 @@ export const endSession = async (reason: SessionEndReason = "expired") => {
     try {
         // Raw axios, not the shared instance, so this can never re-enter the
         // refresh interceptor. The backend clears the HttpOnly cookies here.
-        await axios.post(`${API_BASE_URL}${apiRoutes.logout}`, null, {
+        await axios.post(apiUrl(apiRoutes.logout), null, {
             withCredentials: true,
             timeout: 5000,
         });

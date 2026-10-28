@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRoutes } from "@/lib/constants";
+import { apiRoutes, apiUrl } from "@/lib/constants";
 
 export type PricingPlan = {
     plan_name: string;
@@ -16,7 +16,7 @@ const REVALIDATE_SECONDS = 60;
 // Runs on the server. The shared Axios client is browser-oriented (cookies,
 // session refresh), so this public, unauthenticated read uses plain fetch.
 export async function getPricingPlans(): Promise<PricingPlan[]> {
-    const url = `${API_BASE_URL.replace(/\/+$/, "")}/${apiRoutes.getPricingPlans.replace(/^\/+/, "")}`;
+    const url = apiUrl(apiRoutes.getPricingPlans);
     try {
         const res = await fetch(url, { next: { revalidate: REVALIDATE_SECONDS } });
         if (!res.ok) return [];

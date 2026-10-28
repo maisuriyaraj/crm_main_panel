@@ -20,7 +20,9 @@ export const createFakeBackend = () => {
     };
 
     const adapter = async (config) => {
-        const url = config.url.replace(/^https?:\/\/[^/]+/, "");
+        // The path the request really hits (baseURL joined the way axios does),
+        // so a malformed join like "/api//auth/logout" fails the matches below.
+        const url = new URL(axios.getUri(config)).pathname;
         state.calls.push(url);
 
         if (url === "/api/auth/refresh") {

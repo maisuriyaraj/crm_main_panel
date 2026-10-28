@@ -26,9 +26,9 @@ test("expired/revoked refresh token: single cleanup, single redirect to signin, 
     backend.state.refresh = "401";
 
     const results = await Promise.allSettled([
-        Axios.get("/api/leads"),
-        Axios.get("/api/contacts"),
-        Axios.get("/api/auth/me"),
+        Axios.get("/leads"),
+        Axios.get("/contacts"),
+        Axios.get("/auth/me"),
     ]);
     assert.ok(results.every((r) => r.status === "rejected"));
     // endSession awaits the logout call; let it settle.
@@ -53,7 +53,7 @@ test("expired/revoked refresh token: single cleanup, single redirect to signin, 
 
 test("after the session ended, further requests are cancelled and nothing re-triggers", async () => {
     const before = backend.state.calls.length;
-    await assert.rejects(Axios.get("/api/leads"), (e) => e.name === "CanceledError");
+    await assert.rejects(Axios.get("/leads"), (e) => e.name === "CanceledError");
     await session.endSession(); // repeated logout is a no-op
     assert.equal(backend.state.calls.length, before);
     assert.deepEqual(env.navigations, ["/auth/signin"]);

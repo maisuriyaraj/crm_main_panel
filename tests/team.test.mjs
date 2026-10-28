@@ -1,7 +1,7 @@
 import "./ts-resolver.mjs";
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { AxiosError } from "axios";
+import axios, { AxiosError } from "axios";
 import { installBrowserEnv } from "./browser-env.mjs";
 import { installAdapter } from "./fake-backend.mjs";
 
@@ -21,7 +21,8 @@ const respond = (config, status, data) => {
     return response;
 };
 const adapter = async (config) => {
-    const url = config.url.replace(/^https?:\/\/[^/]+/, "");
+    // Path with the baseURL joined, so routes are keyed the way the API sees them.
+    const url = new URL(axios.getUri(config)).pathname;
     const body = typeof config.data === "string" ? JSON.parse(config.data) : config.data;
     calls.push({ method: config.method.toUpperCase(), url, params: config.params, body });
     const handler = routes[`${config.method.toUpperCase()} ${url}`];

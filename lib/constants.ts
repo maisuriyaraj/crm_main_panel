@@ -29,8 +29,13 @@ export const pageRoutes = {
 export const buildOrgRoute = (orgSlug: string, route: string) => `/${orgSlug}${route}`;
 
 // NEXT_PUBLIC_ so it is inlined into the client bundle; falls back to the
-// local backend for development.
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/";
+// local backend for development. The API mounts every route under /api.
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000/api/";
+
+// Full URL for an apiRoutes path, for callers outside the shared Axios client.
+// Plain concatenation turned ".../api/" + "/auth/logout" into "//auth/logout",
+// which the API answers with 404 — logout then silently did nothing.
+export const apiUrl = (path: string) => `${API_BASE_URL.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
 
 export const apiRoutes = {
     getPricingPlans: "/admin/plan-lists",

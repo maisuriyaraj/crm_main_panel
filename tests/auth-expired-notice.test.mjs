@@ -22,7 +22,7 @@ test("both tokens expired: cleanup first, then the notice waits for acknowledgem
 
     backend.state.access = "expired";
     backend.state.refresh = "401";
-    await Promise.allSettled([Axios.get("/api/leads"), Axios.get("/api/contacts")]);
+    await Promise.allSettled([Axios.get("/leads"), Axios.get("/contacts")]);
     await new Promise((r) => setTimeout(r, 50));
 
     assert.equal(notices.length, 1, "notice shown once despite concurrent failures");
