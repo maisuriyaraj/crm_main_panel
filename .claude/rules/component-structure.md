@@ -25,6 +25,7 @@
 
 ## Routing
 
+- Every public (signed-out) page is wrapped in `PublicLayout` from `components/layout/public/` (shared header, footer, background). Form pages like sign-in and book-a-demo also use `AuthSplit` for the pitch-left / card-right body. Don't build a page-specific header or footer.
 - Never hardcode a route string in a component. Use the `pageRoutes` constants from `lib/constants.ts` with `next/navigation`'s `useRouter()` or `next/link`.
 - Any screen that requires a logged-in user (CRM features included) belongs under the `app/(app)/` route group, which already handles the auth guard, forced-password-reset redirect, and role-gated sidebar shell. Read auth state via the `useAuth()` hook (`hooks/useAuth.ts`), never a raw `useAppSelector` on `state.auth`. See `specs/auth/auth-flow.md` for the full design.
 - Gate UI with `useAuth().can("<key>")` / `canAll([...])` or `<Can>`, using the key the API route checks; never compare role names or `isAdmin`. Without a module's `.view`, render `<NoAccess>` and fire no request. See `../mst_admin_crm/specs/docs/roles/spec.md` §7.4.

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Formik, Form, useFormikContext, type FormikHelpers } from "formik";
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { Building2, CalendarClock, CheckCircle2, Globe, Video } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { pageRoutes } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,18 +127,24 @@ type Done = { kind: "booked"; ack: BookingAck } | { kind: "duplicate"; message: 
 
 function Confirmation({ done, timezone }: { done: Done; timezone: string }) {
     return (
-        <div className="mt-8 flex flex-col items-start gap-4" role="status" aria-live="polite">
-            <CheckCircle2 className="size-10 text-primary" aria-hidden />
+        <div className="mt-8 flex flex-col items-center gap-4 text-center" role="status" aria-live="polite">
+            <span className="flex size-16 items-center justify-center rounded-full bg-primary/10 ring-8 ring-primary/5">
+                <CheckCircle2 className="size-8 text-primary" aria-hidden />
+            </span>
             {done.kind === "booked" ? (
                 <>
                     <h2 className="text-2xl font-bold">Request received</h2>
-                    <p className="text-muted-foreground">
-                        Your demo request for <strong className="text-foreground">{formatBookedTime(done.ack.scheduled_at, timezone)}</strong> is in.
-                    </p>
-                    <p className="text-muted-foreground">
-                        Reference: <span className="font-mono text-foreground">{done.ack.reference}</span>
-                    </p>
                     <p className="text-muted-foreground">Our team will contact you to confirm the time and send the meeting details.</p>
+                    <dl className="w-full divide-y divide-border rounded-2xl border border-border bg-background/60 text-left text-sm">
+                        <div className="flex items-start justify-between gap-4 p-4">
+                            <dt className="text-muted-foreground">When</dt>
+                            <dd className="text-right font-semibold">{formatBookedTime(done.ack.scheduled_at, timezone)}</dd>
+                        </div>
+                        <div className="flex items-center justify-between gap-4 p-4">
+                            <dt className="text-muted-foreground">Reference</dt>
+                            <dd className="rounded-md bg-muted px-2 py-0.5 font-mono font-semibold">{done.ack.reference}</dd>
+                        </div>
+                    </dl>
                 </>
             ) : (
                 <>
@@ -144,8 +152,8 @@ function Confirmation({ done, timezone }: { done: Done; timezone: string }) {
                     <p className="text-muted-foreground">{done.message}</p>
                 </>
             )}
-            <Button asChild variant="outline" size="lg">
-                <Link href="/">Back to home</Link>
+            <Button asChild variant="outline" size="lg" className="mt-2">
+                <Link href={pageRoutes.home}>Back to home</Link>
             </Button>
         </div>
     );
@@ -245,12 +253,18 @@ export default function BookDemoForm() {
                     <Form className="mt-8 space-y-4" noValidate aria-describedby="book-demo-timezone">
                         <FocusFirstError />
                         <ResetSlotOnDateChange />
-                        <TextField name="fullName" label="Full name" autoComplete="name" />
-                        <TextField name="businessEmail" label="Work email" type="email" autoComplete="email" />
-                        <TextField name="businessName" label="Business name" autoComplete="organization" />
-                        <SelectField name="teamSize" label="Team size" placeholder="Select team size" options={TEAM_SIZES.map((t) => ({ value: t, label: t.replace("-", " – ") }))} />
-                        <TextField name="phoneNumber" label="Phone (optional)" type="tel" autoComplete="tel" />
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <TextField name="fullName" label="Full name" autoComplete="name" placeholder="Jane Cooper" />
+                            <TextField name="businessEmail" label="Work email" type="email" autoComplete="email" placeholder="jane@company.com" />
+                            <TextField name="businessName" label="Business name" autoComplete="organization" placeholder="Acme Inc." />
+                            <SelectField name="teamSize" label="Team size" placeholder="Select team size" options={TEAM_SIZES.map((t) => ({ value: t, label: t.replace("-", " – ") }))} />
+                        </div>
+                        <TextField name="phoneNumber" label="Phone (optional)" type="tel" autoComplete="tel" placeholder="+1 555 000 0000" />
 
+                        <div className="space-y-3 rounded-2xl border border-border bg-background/60 p-4">
+                            <p className="flex items-center gap-2 text-sm font-semibold">
+                                <CalendarClock className="size-4 text-primary" aria-hidden /> Choose your slot
+                            </p>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                             <SelectField
                                 name="preferredDate"
@@ -267,8 +281,8 @@ export default function BookDemoForm() {
                                 options={(day?.slots ?? []).map((s) => ({ value: s, label: formatSlotTime(s, timezone) }))}
                             />
                         </div>
-                        <p id="book-demo-timezone" className="text-sm text-muted-foreground">
-                            Times shown in {timezone} (your device&apos;s timezone).
+                        <p id="book-demo-timezone" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            <Globe className="size-3.5 shrink-0" aria-hidden /> Times shown in {timezone} (your device&apos;s timezone)
                         </p>
                         {slotsState === "error" && (
                             <p role="alert" className="text-sm text-red-500">
@@ -283,16 +297,28 @@ export default function BookDemoForm() {
                                 {slotsState === "loading" ? "Loading…" : "Show later dates"}
                             </button>
                         )}
+                        </div>
 
                         <fieldset className="flex flex-col gap-1.5">
                             <legend className="mb-1.5 text-sm font-medium">Meeting</legend>
-                            <div className="flex gap-6 text-sm">
-                                {(["virtual", "onsite"] as const).map((type) => (
-                                    <label key={type} className="flex items-center gap-2">
-                                        <input type="radio" name="meetingType" value={type} checked={values.meetingType === type} onChange={handleChange} />
-                                        {type === "virtual" ? "Online" : "In person"}
-                                    </label>
-                                ))}
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                {(["virtual", "onsite"] as const).map((type) => {
+                                    const Icon = type === "virtual" ? Video : Building2;
+                                    const selected = values.meetingType === type;
+                                    return (
+                                        <label
+                                            key={type}
+                                            className={cn(
+                                                "flex cursor-pointer items-center gap-2.5 rounded-xl border px-4 py-3 font-medium transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring",
+                                                selected ? "border-primary bg-primary/10 text-foreground" : "border-border bg-background text-muted-foreground hover:border-border-strong",
+                                            )}
+                                        >
+                                            <input type="radio" name="meetingType" value={type} checked={selected} onChange={handleChange} className="sr-only" />
+                                            <Icon className={cn("size-4", selected && "text-primary")} aria-hidden />
+                                            {type === "virtual" ? "Online" : "In person"}
+                                        </label>
+                                    );
+                                })}
                             </div>
                         </fieldset>
 
@@ -325,6 +351,7 @@ export default function BookDemoForm() {
                         <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
                             {isSubmitting ? "Booking…" : "Book My Demo"}
                         </Button>
+                        <p className="text-center text-xs text-muted-foreground">Free, no commitment. We&apos;ll only use your details to arrange the demo.</p>
                     </Form>
                 );
             }}

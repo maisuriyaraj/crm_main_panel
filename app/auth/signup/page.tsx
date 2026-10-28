@@ -1,60 +1,64 @@
 "use client";
 
+import { CalendarCheck, Clock, MessagesSquare, ShieldCheck, Workflow } from "lucide-react";
 import BookDemoForm from "@/components/booking/BookDemoForm";
+import { AuthSplit } from "@/components/layout/public/AuthSplit";
+import { PublicLayout } from "@/components/layout/public/PublicLayout";
+
+const HIGHLIGHTS = [
+    { icon: Clock, title: "30 minute live walkthrough", text: "A focused tour of the parts that matter to you." },
+    { icon: Workflow, title: "Tailored to your workflow", text: "We shape the demo around how your team works today." },
+    { icon: MessagesSquare, title: "Your questions answered live", text: "Bring your edge cases, we'll walk through them." },
+    { icon: ShieldCheck, title: "No commitment required", text: "No card, no contract, just a conversation." },
+];
+
+const STEPS = ["Pick a time that suits you", "We confirm and send the meeting link", "Meet the team and see OrbitOps live"];
 
 export default function BookDemo() {
     return (
-        <div className="relative min-h-screen overflow-hidden bg-background">
-            {/* Background Glow */}
-            <div className="absolute inset-0 overflow-hidden">
-                <div className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]" />
+        <PublicLayout>
+            <AuthSplit
+                eyebrow="Free personalized demo"
+                title={<>See OrbitOps <span className="text-gradient">in action</span></>}
+                description="Book a personalized walkthrough of CRM, Billing, Automation, Marketing and Ads Management, all in one place."
+                cardTitle="Book a demo"
+                cardDescription="Pick a time that suits you and tell us a little about your business."
+                aside={
+                    <>
+                        <ul className="grid gap-4 sm:grid-cols-2">
+                            {HIGHLIGHTS.map(({ icon: Icon, title, text }) => (
+                                <li key={title} className="flex gap-3 rounded-2xl border border-border bg-glass p-4 backdrop-blur">
+                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                                        <Icon className="size-5" aria-hidden />
+                                    </span>
+                                    <div>
+                                        <p className="font-semibold">{title}</p>
+                                        <p className="mt-0.5 text-sm text-muted-foreground">{text}</p>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
 
-                <div className="absolute bottom-20 right-20 h-[450px] w-[450px] rounded-full bg-cyan-500/20 blur-[140px]" />
-            </div>
-
-            <div className="relative z-10 grid min-h-screen lg:grid-cols-2">
-                {/* Left */}
-                <div className="hidden lg:flex flex-col justify-between p-16">
-                    <div className="rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
-                        <div>
-                            <h1 className="text-5xl font-bold leading-tight">
-                                See OrbitOps
-                                <br />
-                                In Action
-                            </h1>
-
-                            <p className="mt-6 text-lg text-muted-foreground">
-                                Book a personalized walkthrough of CRM, Billing, Automation,
-                                Marketing and Ads Management.
+                        <div className="mt-8 hidden rounded-2xl border border-border bg-glass p-5 backdrop-blur lg:block">
+                            <p className="flex items-center gap-2 text-sm font-semibold">
+                                <CalendarCheck className="size-4 text-primary" aria-hidden /> What happens next
                             </p>
-
-                            <div className="mt-8 space-y-4">
-                                <div>✓ 30 Minute Live Walkthrough</div>
-                                <div>✓ Tailored To Your Team&apos;s Workflow</div>
-                                <div>✓ No Commitment Required</div>
-                                <div>✓ Get Your Questions Answered Live</div>
-                            </div>
+                            <ol className="mt-4 space-y-3">
+                                {STEPS.map((step, i) => (
+                                    <li key={step} className="flex items-center gap-3 text-sm text-muted-foreground">
+                                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                                            {i + 1}
+                                        </span>
+                                        {step}
+                                    </li>
+                                ))}
+                            </ol>
                         </div>
-                    </div>
-
-                    <div className="text-sm text-muted-foreground">
-                        Powered by RJ Industries
-                    </div>
-                </div>
-
-                {/* Right */}
-                <div className="flex items-center justify-center px-6 py-12">
-                    <div className="w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
-                        <h1 className="text-3xl font-bold">Book a Demo</h1>
-
-                        <p className="mt-2 text-muted-foreground">
-                            Pick a time that suits you and tell us a little about your business.
-                        </p>
-
-                        <BookDemoForm />
-                    </div>
-                </div>
-            </div>
-        </div>
+                    </>
+                }
+            >
+                <BookDemoForm />
+            </AuthSplit>
+        </PublicLayout>
     );
 }

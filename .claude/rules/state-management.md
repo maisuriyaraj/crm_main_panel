@@ -2,7 +2,7 @@
 
 ## Store
 
-- The store is assembled in `lib/store/index.ts`. Every new slice's reducer must be registered there under a short state key (see `pricing`, `publicData`).
+- The store is assembled in `lib/store/index.ts`. Every new slice's reducer must be registered there under a short state key (see `publicData`, `auth`).
 - `lib/store/StoreProvider.tsx` (client component) wraps the app once in `app/layout.tsx` — don't add a second `<Provider>`.
 
 ## Hooks
@@ -11,7 +11,7 @@
 
 ## Async slice pattern
 
-Every existing async slice (`lib/store/slices/pricingPlansSlice.ts`, `lib/store/slices/publicAPisSlice.ts`) follows the same shape — new slices must match it:
+Every existing async slice (e.g. `lib/store/slices/publicAPisSlice.ts`, `lib/store/slices/authSlice.ts`) follows the same shape — new slices must match it:
 
 - The thunk (`createAsyncThunk`) takes one argument object: `{ data, onSuccess, onFailure }`. It calls the API through the shared `Axios` client (see `.claude/rules/api-conventions.md`), then invokes `onSuccess(response.data)` or `onFailure(error)` **in addition to** returning/rejecting — callers rely on these callbacks for UI side effects (e.g. `notify(...)`), not only on the thunk's fulfilled/rejected state.
 - Reducer cases:

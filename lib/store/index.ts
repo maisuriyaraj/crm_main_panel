@@ -1,5 +1,4 @@
 import { combineReducers, configureStore, type UnknownAction } from "@reduxjs/toolkit";
-import pricingPlansReducer from "./slices/pricingPlansSlice";
 import publicAPisReducer from "./slices/publicAPisSlice";
 import authReducer, { sessionEnded } from "./slices/authSlice";
 import orgUsersReducer from "./slices/orgUsersSlice";
@@ -14,7 +13,6 @@ import { onSessionEnded } from "@/lib/auth/session";
 // Import additional slice reducers here as the project grows
 
 const appReducer = combineReducers({
-  pricing: pricingPlansReducer,
   publicData: publicAPisReducer,
   auth: authReducer,
   orgUsers: orgUsersReducer,

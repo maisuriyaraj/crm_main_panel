@@ -19,6 +19,9 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { AuthSplit } from "@/components/layout/public/AuthSplit";
+import { PublicLayout } from "@/components/layout/public/PublicLayout";
 
 const signInSchema = z.object({
   email: z.string().min(1, "Email is required").email("Enter a valid email"),
@@ -94,86 +97,33 @@ function LoginForm() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-background">
-
-      {/* Background Glow */}
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-20 left-20 h-[450px] w-[450px] rounded-full bg-primary/20 blur-[140px]" />
-
-        <div className="absolute bottom-20 right-20 h-[450px] w-[450px] rounded-full bg-cyan-500/20 blur-[140px]" />
-      </div>
-
-      <div className="relative z-10 grid min-h-screen lg:grid-cols-2">
-
-        {/* Left */}
-        <div className="hidden lg:flex flex-col justify-between p-16">
-          <div>
-            <div className="text-4xl font-bold text-gradient">
-              OrbitOps
+    <PublicLayout>
+      <AuthSplit
+        eyebrow="Welcome back"
+        title={<>Your growth hub, <span className="text-gradient">all in one place</span></>}
+        description="CRM, Sales, Marketing, Billing, Automation, Analytics and Ads Management unified into a single growth platform."
+        cardTitle="Sign in"
+        cardDescription="Sign in to access your OrbitOps workspace."
+        aside={
+          <div className="hidden max-w-lg rounded-3xl border border-border bg-glass p-6 backdrop-blur-xl panel-shadow lg:block" aria-hidden>
+            <div className="mb-4 flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Monthly Revenue</span>
+              <span className="font-semibold text-primary">+32%</span>
             </div>
-
-            <p className="mt-4 max-w-md text-muted-foreground">
-              CRM, Sales, Marketing, Billing, Automation,
-              Analytics and Ads Management unified into a
-              single growth platform.
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
-            <div className="mb-6 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Monthly Revenue
-              </span>
-
-              <span className="text-green-500 font-semibold">
-                +32%
-              </span>
-            </div>
-
-            <div className="text-4xl font-bold">
-              $124,820
-            </div>
-
-            <div className="mt-8 grid grid-cols-2 gap-4">
-              <div className="rounded-xl border border-border p-4">
-                <div className="text-sm text-muted-foreground">
-                  Leads
-                </div>
-
-                <div className="mt-2 text-2xl font-bold">
-                  8,294
-                </div>
+            <div className="text-4xl font-bold">$124,820</div>
+            <div className="mt-6 grid grid-cols-2 gap-4">
+              <div className="rounded-xl border border-border bg-background/60 p-4">
+                <div className="text-sm text-muted-foreground">Leads</div>
+                <div className="mt-2 text-2xl font-bold">8,294</div>
               </div>
-
-              <div className="rounded-xl border border-border p-4">
-                <div className="text-sm text-muted-foreground">
-                  Deals
-                </div>
-
-                <div className="mt-2 text-2xl font-bold">
-                  427
-                </div>
+              <div className="rounded-xl border border-border bg-background/60 p-4">
+                <div className="text-sm text-muted-foreground">Deals</div>
+                <div className="mt-2 text-2xl font-bold">427</div>
               </div>
             </div>
           </div>
-
-          <div className="text-sm text-muted-foreground">
-            Powered by RJ Industries
-          </div>
-        </div>
-
-        {/* Right */}
-        <div className="flex items-center justify-center px-6 py-12">
-
-          <div className="w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
-            <h1 className="text-3xl font-bold">
-              Welcome Back
-            </h1>
-
-            <p className="mt-2 text-muted-foreground">
-              Sign in to access your OrbitOps workspace.
-            </p>
-
+        }
+      >
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
 
@@ -229,14 +179,10 @@ function LoginForm() {
                   )}
                 />
 
-                <button
-                  type="submit"
-                  disabled={form.formState.isSubmitting}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-                >
+                <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
                   {form.formState.isSubmitting ? "Signing In..." : "Sign In"}
-                  <ArrowRight size={16} />
-                </button>
+                  <ArrowRight />
+                </Button>
               </form>
             </Form>
 
@@ -258,9 +204,7 @@ function LoginForm() {
                 Start Free Trial
               </Link>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      </AuthSplit>
+    </PublicLayout>
   );
 }
