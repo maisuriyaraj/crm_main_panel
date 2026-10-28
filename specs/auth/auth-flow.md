@@ -1,7 +1,7 @@
 # Spec: Auth Flow (Login, Sessions, Team Management)
 
 ## Status
-Implemented
+Implemented. Forgot/reset by email, change password, the sessions screen, cross-tab sign-out and SESSION_REVOKED handling are now specified in ../../../docs/auth/spec.md, which takes precedence where the two differ.
 
 ## Type
 New Feature
