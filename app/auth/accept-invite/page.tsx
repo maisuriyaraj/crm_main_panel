@@ -9,7 +9,8 @@ import { z } from "zod";
 import { Lock, User } from "lucide-react";
 
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
-import { handleCookieActions, handleLocalStorageActions, notify } from "@/lib/commonFunctions";
+import { handleCookieActions, notify } from "@/lib/commonFunctions";
+import { rememberSignedInUser } from "@/lib/auth/session";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
   reqToAcceptInvitation,
@@ -149,8 +150,7 @@ export default function AcceptInvitePage() {
               reqToFetchMe({
                 data: null,
                 onSuccess: (me: { data: any }) => {
-                  handleLocalStorageActions("set", "user", me.data);
-                  handleCookieActions("set", "user", me.data, { expires: 30 * 24 * 60 * 60 });
+                  rememberSignedInUser(me.data);
                   notify(`Welcome to ${me.data?.organizationName ?? "your new workspace"}!`, { type: "success" });
                   router.replace(buildOrgRoute(String(me.data?.organizationId), pageRoutes.dashboard));
                   resolve();

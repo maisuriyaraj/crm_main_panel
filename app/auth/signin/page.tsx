@@ -1,31 +1,35 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, Lock, ArrowRight } from "lucide-react";
+import { Mail, ArrowRight } from "lucide-react";
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToLogin } from "@/lib/store/slices/authSlice";
-import { handleCookieActions, handleLocalStorageActions, notify } from "@/lib/commonFunctions";
+import { rememberSignedInUser } from "@/lib/auth/session";
+import { authErrorMessage } from "@/lib/auth/errors";
+import { signInPasswordField } from "@/lib/auth/passwordPolicy";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { PasswordInput } from "@/components/auth/password-input";
 import { AuthSplit } from "@/components/layout/public/AuthSplit";
 import { PublicLayout } from "@/components/layout/public/PublicLayout";
 
 const signInSchema = z.object({
-  email: z.string().min(1, "Email is required").email("Enter a valid email"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+  password: signInPasswordField,
 });
 
 type SignInValues = z.infer<typeof signInSchema>;
@@ -42,58 +46,49 @@ function LoginForm() {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [formError, setFormError] = useState<string | null>(null);
 
   const form = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  const onSubmit = (values: SignInValues) => {
-    dispatch(
-      reqToLogin({
-        data: values,
-        onSuccess: () => {
-          dispatch(
-            reqToFetchMe({
-              data: null,
-              onSuccess: (me: { data: any }) => {
-                handleLocalStorageActions("set", "user", me.data);
-                // Routing hint for proxy.ts only (which dashboard to send a
-                // signed-in visitor of /auth/signin to), never trusted for
-                // authorization. Lives as long as the refresh session.
-                handleCookieActions("set", "user", me.data, { expires: 30 * 24 * 60 * 60 });
+  // Returns the promise so react-hook-form keeps isSubmitting true (and the
+  // button disabled) until sign-in has fully finished.
+  const onSubmit = async (values: SignInValues) => {
+    setFormError(null);
 
-                if (me?.data?.mustResetPassword) {
-                  router.replace(pageRoutes.resetPassword);
-                  return;
-                }
+    // The thunk's onFailure carries the raw error (status + code); the
+    // rejected action only has a message.
+    let failure: unknown = null;
+    const login = await dispatch(reqToLogin({ data: values, onFailure: (error: unknown) => { failure = error; } }));
+    if (reqToLogin.rejected.match(login)) {
+      setFormError(authErrorMessage(failure, "Invalid email or password."));
+      return;
+    }
 
-                const orgId = String(me?.data?.organizationId);
-                const redirect = searchParams.get("redirect");
-                // Only honor same-origin, org-scoped redirects — never let an
-                // arbitrary "redirect" query param send the user off-app.
-                const isSafeRedirect =
-                  redirect &&
-                  redirect.startsWith(`/${orgId}/`) &&
-                  !redirect.startsWith("//");
+    const meAction = await dispatch(reqToFetchMe({ data: null }));
+    const profile: { organizationId: number; mustResetPassword: boolean; email: string } | undefined =
+      reqToFetchMe.fulfilled.match(meAction) ? meAction.payload?.data : undefined;
+    if (!profile) {
+      setFormError("Signed in, but couldn't load your account. Please try again.");
+      return;
+    }
 
-                router.replace(
-                  isSafeRedirect ? redirect : buildOrgRoute(orgId, pageRoutes.dashboard),
-                );
-              },
-              onFailure: () => {
-                notify("Signed in, but couldn't load your account. Please try again.", {
-                  type: "error",
-                });
-              },
-            }),
-          );
-        },
-        onFailure: () => {
-          notify("Invalid email or password.", { type: "error" });
-        },
-      }),
-    );
+    rememberSignedInUser(profile);
+
+    if (profile.mustResetPassword) {
+      router.replace(pageRoutes.resetPassword);
+      return;
+    }
+
+    const orgId = String(profile.organizationId);
+    const redirect = searchParams.get("redirect");
+    // Only honor same-origin, org-scoped redirects — never let an arbitrary
+    // "redirect" query param send the user off-app.
+    const isSafeRedirect = redirect && redirect.startsWith(`/${orgId}/`) && !redirect.startsWith("//");
+
+    router.replace(isSafeRedirect ? redirect : buildOrgRoute(orgId, pageRoutes.dashboard));
   };
 
   return (
@@ -124,86 +119,69 @@ function LoginForm() {
           </div>
         }
       >
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
+            {formError && (
+              <p role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {formError}
+              </p>
+            )}
 
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <label className="mb-2 block text-sm">
-                        Email
-                      </label>
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" aria-hidden />
+                      <Input
+                        type="email"
+                        autoComplete="email"
+                        placeholder="name@company.com"
+                        className="h-auto rounded-xl border-border bg-background py-3 pl-10 pr-4 text-base"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                      <FormControl>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between">
+                    <FormLabel>Password</FormLabel>
+                    <Link href={pageRoutes.forgotPassword} className="text-sm font-medium text-primary hover:underline">
+                      Forgot password?
+                    </Link>
+                  </div>
+                  <FormControl>
+                    <PasswordInput autoComplete="current-password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
-                          <Input
-                            type="email"
-                            placeholder="name@company.com"
-                            className="h-auto rounded-xl border-border bg-background pl-10 pr-4 py-3 text-base"
-                            {...field}
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+            <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
+              {form.formState.isSubmitting ? "Signing in…" : "Sign in"}
+              <ArrowRight />
+            </Button>
+          </form>
+        </Form>
 
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <label className="mb-2 block text-sm">
-                        Password
-                      </label>
-
-                      <FormControl>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-
-                          <Input
-                            type="password"
-                            placeholder="••••••••"
-                            className="h-auto rounded-xl border-border bg-background pl-10 pr-4 py-3 text-base"
-                            {...field}
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <Button type="submit" size="lg" className="w-full" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Signing In..." : "Sign In"}
-                  <ArrowRight />
-                </Button>
-              </form>
-            </Form>
-
-            <div className="mt-6 text-center text-sm">
-              <Link
-                href={pageRoutes.forgotPassword}
-                className="text-primary"
-              >
-                Forgot Password?
-              </Link>
-            </div>
-
-            <div className="mt-6 text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link
-                href={pageRoutes.signup}
-                className="font-semibold text-primary"
-              >
-                Start Free Trial
-              </Link>
-            </div>
+        <div className="mt-6 text-center text-sm">
+          Don&apos;t have an account?{" "}
+          <Link href={pageRoutes.signup} className="font-semibold text-primary">
+            Start Free Trial
+          </Link>
+        </div>
       </AuthSplit>
     </PublicLayout>
   );

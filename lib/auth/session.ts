@@ -1,6 +1,23 @@
 import axios from "axios";
 import { apiRoutes, apiUrl, pageRoutes } from "@/lib/constants";
-import { handleCookieActions } from "@/lib/commonFunctions";
+import { handleCookieActions, handleLocalStorageActions } from "@/lib/commonFunctions";
+
+// Lifetime of the routing hint below; matches the refresh token's 45 days.
+const USER_HINT_MAX_AGE_S = 45 * 24 * 60 * 60;
+
+type SignedInProfile = { organizationId: number | string; mustResetPassword?: boolean; email?: string };
+
+// After sign-in: the proxy routes by the org id, and the invitation page
+// compares the email. That is all the JS-readable `user` cookie carries;
+// permissions and the rest of the profile stay out of every request.
+export const rememberSignedInUser = (profile: SignedInProfile) => {
+    handleLocalStorageActions("set", "user", profile);
+    handleCookieActions("set", "user", {
+        organizationId: profile.organizationId,
+        mustResetPassword: !!profile.mustResetPassword,
+        email: profile.email,
+    }, { expires: USER_HINT_MAX_AGE_S });
+};
 
 // Device preferences that aren't tied to who is signed in survive a logout.
 const PRESERVED_LOCAL_STORAGE_KEYS = ["theme"];

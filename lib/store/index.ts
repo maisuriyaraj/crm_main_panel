@@ -1,5 +1,6 @@
 import { combineReducers, configureStore, type UnknownAction } from "@reduxjs/toolkit";
 import publicAPisReducer from "./slices/publicAPisSlice";
+import accountSecurityReducer from "./slices/accountSecuritySlice";
 import authReducer, { sessionEnded } from "./slices/authSlice";
 import orgUsersReducer from "./slices/orgUsersSlice";
 import leadsReducer from "./slices/leadsSlice";
@@ -15,6 +16,7 @@ import { onSessionEnded } from "@/lib/auth/session";
 const appReducer = combineReducers({
   publicData: publicAPisReducer,
   auth: authReducer,
+  accountSecurity: accountSecurityReducer,
   orgUsers: orgUsersReducer,
   leads: leadsReducer,
   contacts: contactsReducer,

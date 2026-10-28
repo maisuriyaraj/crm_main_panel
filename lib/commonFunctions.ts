@@ -21,7 +21,7 @@ export const handleLocalStorageActions = (action: "set" | "get" | "remove", key:
     }
 }
 
-export const handleCookieActions = (action: "set" | "get" | "remove", key: string, value?: string, options?: { expires?: number; path?: string }) => {
+export const handleCookieActions = (action: "set" | "get" | "remove", key: string, value?: unknown, options?: { expires?: number; path?: string }) => {
     const stringifyValue = value ? encodeURIComponent(JSON.stringify(value)) : "";
     switch (action) {
         case "set":

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import { ChevronRight, Moon, Rocket, Sun } from "lucide-react";
+import { ChevronRight, LogOut, Moon, Rocket, ShieldCheck, Sun } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
-import { buildOrgRoute, SITE_NAME } from "@/lib/constants";
+import { buildOrgRoute, pageRoutes, SITE_NAME } from "@/lib/constants";
 import { isNavParent, navGroups, visibleNavGroups, type NavParent } from "@/lib/navigation";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Switch } from "@/components/ui/switch";
@@ -30,7 +30,7 @@ import {
 export function AppSidebar() {
   const pathname = usePathname();
   const params = useParams<{ orgnization: string }>();
-  const { can } = useAuth();
+  const { can, logout } = useAuth();
   const orgSlug = params?.orgnization ?? "";
 
   const buildHref = (route: string) => buildOrgRoute(orgSlug, route);
@@ -86,7 +86,21 @@ export function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Security" isActive={isActive(buildHref(pageRoutes.settingsSecurity))}>
+              <Link href={buildHref(pageRoutes.settingsSecurity)}>
+                <ShieldCheck />
+                <span>Security</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <ThemeToggle />
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Sign out" onClick={() => logout()}>
+              <LogOut />
+              <span>Sign out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
 
