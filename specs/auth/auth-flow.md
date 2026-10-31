@@ -1,7 +1,7 @@
 # Spec: Auth Flow (Login, Sessions, Team Management)
 
 ## Status
-Implemented. Forgot/reset by email, change password, the sessions screen, cross-tab sign-out and SESSION_REVOKED handling are now specified in ../../../docs/auth/spec.md, which takes precedence where the two differ.
+Implemented. Current status by requirement is in specs/tenant-shell/auth-onboarding/spec.md and specs/tenant-shell/settings/spec.md.
 
 ## Type
 New Feature
