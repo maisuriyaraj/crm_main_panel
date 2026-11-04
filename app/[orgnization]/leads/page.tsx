@@ -24,6 +24,7 @@ import {
   reqToUpdateLeadNote,
 } from "@/lib/store/slices/leadsSlice";
 import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
+import { isFeatureOn, reqToGetFeatures } from "@/lib/store/slices/featuresSlice";
 import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
 import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
 import { resolveOwnerName, type Lead, type LeadActivityType } from "@/lib/leads/types";
@@ -102,6 +103,8 @@ function LeadsWorkspace() {
   const notes = useAppSelector((state) => state.leads.activeLeadNotes);
   // Active teammates (names only), readable by every role.
   const owners = useAppSelector((state) => state.orgUsers.memberOptions);
+  const storageOn = useAppSelector((state) => isFeatureOn(state.features, "storage_enabled"));
+  const featuresLoaded = useAppSelector((state) => state.features.isLoaded);
 
   // Stopgap: the backend isn't seeded for every org yet (empty statuses
   // list). Fall back to static placeholders so the form isn't blocked; real
@@ -134,6 +137,7 @@ function LeadsWorkspace() {
     refreshLeads();
     dispatch(reqToGetLeadStatuses({ data: null }));
     if (canLookupMembers) dispatch(reqToGetMemberOptions({ data: null }));
+    if (!featuresLoaded) dispatch(reqToGetFeatures({}));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
@@ -684,6 +688,7 @@ function LeadsWorkspace() {
         onUpdateNote={canUpdate ? handleUpdateNote : undefined}
         onDeleteNote={canUpdate ? handleDeleteNote : undefined}
         onConvert={canConvert ? handleConvertLead : undefined}
+        attachments={storageOn ? { canUpload: canUpdate, canDelete: canUpdate } : undefined}
       />
     </div>
   );

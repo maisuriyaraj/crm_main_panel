@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LeadAttachments } from "@/components/leads/lead-attachments";
 
 const ACTIVITY_TYPES: LeadActivityType[] = ["call", "email", "meeting", "note", "whatsapp", "sms", "demo"];
 
@@ -51,6 +52,8 @@ interface LeadDetailSheetProps {
   onUpdateNote?: (noteId: string, note: string) => void;
   onDeleteNote?: (noteId: string) => void;
   onConvert?: (lead: Lead) => void;
+  // Absent when the storage feature is off for the organization: the tab is hidden.
+  attachments?: { canUpload: boolean; canDelete: boolean };
 }
 
 export function LeadDetailSheet({
@@ -67,6 +70,7 @@ export function LeadDetailSheet({
   onUpdateNote,
   onDeleteNote,
   onConvert,
+  attachments,
 }: LeadDetailSheetProps) {
   const [activityType, setActivityType] = useState<LeadActivityType>("call");
   const [activitySubject, setActivitySubject] = useState("");
@@ -168,6 +172,7 @@ export function LeadDetailSheet({
             <TabsList className="w-full">
               <TabsTrigger value="activity" className="flex-1">Activity</TabsTrigger>
               <TabsTrigger value="notes" className="flex-1">Notes</TabsTrigger>
+              {attachments && <TabsTrigger value="attachments" className="flex-1">Attachments</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="activity" className="space-y-3">
@@ -309,6 +314,18 @@ export function LeadDetailSheet({
                 )}
               </ul>
             </TabsContent>
+
+            {attachments && (
+              <TabsContent value="attachments">
+                <LeadAttachments
+                  key={lead.id}
+                  leadId={lead.id}
+                  owners={owners}
+                  canUpload={attachments.canUpload}
+                  canDelete={attachments.canDelete}
+                />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </SheetContent>

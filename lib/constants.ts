@@ -73,4 +73,6 @@ export const apiRoutes = {
     leadNotes: "/leads/notes",
     contacts: "/contacts",
     contactNotes: "/contacts/notes",
+    features: "/features",
+    storageUsage: "/storage/usage",
 }
