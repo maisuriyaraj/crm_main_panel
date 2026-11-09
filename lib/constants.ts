@@ -13,6 +13,7 @@ export const pageRoutes = {
     dashboard: "/dashboard",
     settingsTeam: "/settings/team",
     settingsSecurity: "/settings/security",
+    settingsUsage: "/settings/usage",
     setup: "/setup",
     settingsIntegrations: "/settings/integrations",
     settingsTeamRoles: "/settings/team/roles",
@@ -77,6 +78,9 @@ export const apiRoutes = {
     contactNotes: "/contacts/notes",
     features: "/features",
     storageUsage: "/storage/usage",
+    usage: "/app/usage",
+    usageHeldLeads: "/app/usage/held-leads",
+    notifications: "/app/notifications",
     // Multi-factor sign-in: the three sign-in steps take the short-lived MFA token,
     // the rest act on the signed-in member.
     mfaEnrollStart: "/auth/mfa/enroll/start",

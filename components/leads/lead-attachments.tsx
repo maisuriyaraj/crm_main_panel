@@ -23,6 +23,7 @@ import {
 } from "@/lib/store/slices/leadAttachmentsSlice";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { notify } from "@/lib/commonFunctions";
+import { useUsage } from "@/hooks/useUsage";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -48,6 +49,8 @@ interface LeadAttachmentsProps {
 
 export function LeadAttachments({ leadId, owners, canUpload, canDelete }: LeadAttachmentsProps) {
   const dispatch = useAppDispatch();
+  const { summary: planUsage, refresh: refreshPlanUsage } = useUsage();
+  const upgradeMessage = planUsage?.upgradeMessage ?? null;
   const { leadId: loadedFor, items, isLoading, error, usage } = useAppSelector((state) => state.leadAttachments);
   const shown = loadedFor === leadId ? items : [];
 
@@ -90,7 +93,8 @@ export function LeadAttachments({ leadId, owners, canUpload, canDelete }: LeadAt
             // Fresh numbers, so the message shows what is really used now.
             const result = await refreshUsage();
             const fresh = reqToGetStorageUsage.fulfilled.match(result) ? result.payload : usage;
-            setUploadError(fresh ? storageFullMessage(fresh, file.size) : describeUploadError(failure));
+            setUploadError(fresh ? storageFullMessage(fresh, file.size, upgradeMessage) : describeUploadError(failure));
+            refreshPlanUsage();
             return;
           }
           setUploadError(describeUploadError(failure));

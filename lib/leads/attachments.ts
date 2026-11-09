@@ -122,10 +122,13 @@ export const checkFileBeforeUpload = (file: { name: string; size: number }, usag
   return null;
 };
 
-export const storageFullMessage = (usage: StorageUsage, fileBytes?: number) => {
+// `upgradeMessage` is the API's wording for the caller's role (admins contact
+// OrbitOps, others ask an admin); without it the generic advice is shown.
+export const storageFullMessage = (usage: StorageUsage, fileBytes?: number, upgradeMessage?: string | null) => {
   const left = Math.max(usage.limitBytes - usage.usedBytes, 0);
   const need = fileBytes ? `This file needs ${formatBytes(fileBytes)}, but only ${formatBytes(left)} is left. ` : "";
-  return `Your organization's file storage is full: ${formatBytes(usage.usedBytes)} of ${formatBytes(usage.limitBytes)} used (${usage.percentUsed}%). ${need}Delete files you no longer need, or ask your admin about a larger plan.`;
+  const advice = upgradeMessage ? `Delete files you no longer need. ${upgradeMessage}` : "Delete files you no longer need, or ask your admin about a larger plan.";
+  return `Your organization's file storage is full: ${formatBytes(usage.usedBytes)} of ${formatBytes(usage.limitBytes)} used (${usage.percentUsed}%). ${need}${advice}`;
 };
 
 const STORAGE_FULL = "STORAGE_QUOTA_EXCEEDED";

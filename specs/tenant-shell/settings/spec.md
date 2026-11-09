@@ -13,8 +13,12 @@ Source: [OrbitOps SRS](../../../../docs/requirements/orbitops-srs.md). A require
 |---|---|---|---|---|---|
 | SH-S1 | Company profile: name, address, logo, GSTIN/tax ID, default currency, time zone, date format (default DD-MM-YYYY). | Must | ❌ | — | No company settings page. `app/[orgnization]/settings/` has only `security` and `team`. |
 | SH-S2 | Users and roles: invite, deactivate, assign role and team (see 2.2). | Must | 🟡 | `app/[orgnization]/settings/team/page.tsx`, `components/team/members-tab.tsx`, `components/team/invite-member-dialog.tsx`, `components/team/invite-link-view.tsx`, `components/team/member-action-dialogs.tsx` | No team assignment. The admin copies and shares the invite link. |
-| SH-S3 | Subscription view: current plan, usage against limits, invoices from OrbitOps, upgrade request. | Must | 🟡 | `app/[orgnization]/settings/team/page.tsx` (`seatsUsed`, `seatsLimit`) | A seat bar on the Team page only. No plan view, invoices or upgrade request. |
+| SH-S3 | Subscription view: current plan, usage against limits, invoices from OrbitOps, upgrade request. | Must | 🟡 | `app/[orgnization]/settings/usage/page.tsx`, `app/[orgnization]/settings/team/page.tsx` (seat bar) | Since 2026-11-09 Settings > Plan & usage shows the plan name and usage against every limit (see [leads/assignment-limits](../../leads/assignment-limits/spec.md)). No invoices from OrbitOps and no upgrade request: the backend has neither (platform billing). Not covered by tests. |
 | SH-S4 | Notification preferences per user (in-app, email) per event type. | Should | ❌ | — | No preferences screen. |
+
+## Built from the backend list (usage, 2026-11-09)
+Built on 2026-11-09 as Settings > Plan & usage.
+`GET /app/usage` now gives users, leads, storage and API against the plan's limits for every member, with `is_admin` and `upgrade_message` (SH-S3's "usage against limits"). The screen details are listed in [leads/assignment-limits](../../leads/assignment-limits/spec.md), "Pending from the backend". Invoices from OrbitOps and an upgrade request still have no backend.
 
 ## Out-of-SRS behaviour
 - Ownership transfer and the Activity tab (`components/team/activity-tab.tsx`) are not separately listed in the SRS.

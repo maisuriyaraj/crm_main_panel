@@ -9,6 +9,8 @@ import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToGetTeamRoles } from "@/lib/store/slices/teamRolesSlice";
 import { useAuth } from "@/hooks/useAuth";
+import { useUsage } from "@/hooks/useUsage";
+import { FALLBACK_UPGRADE_MESSAGE } from "@/lib/usage/mappers";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -38,6 +40,7 @@ function TeamSettings() {
   const params = useParams<{ orgnization: string }>();
   const { user, can } = useAuth();
   const summary = useAppSelector((state) => state.orgUsers.summary);
+  const { summary: usage } = useUsage();
   const rolesState = useAppSelector((state) => state.teamRoles);
 
   const canView = can("team.view");
@@ -104,6 +107,7 @@ function TeamSettings() {
     );
   }
 
+  const upgradeMessage = usage?.upgradeMessage ?? FALLBACK_UPGRADE_MESSAGE;
   const seatsLimit = summary?.seatsLimit ?? null;
   const seatsUsed = summary?.seatsUsed ?? 0;
   const seatsFull = seatsLimit !== null && seatsUsed >= seatsLimit;
@@ -126,7 +130,11 @@ function TeamSettings() {
                   ` · ${summary.pendingInvitations} pending invitation${summary.pendingInvitations === 1 ? "" : "s"}`}
               </p>
               {seatsLimit !== null && seatsLimit > 0 && (
-                <Progress value={Math.min(100, (seatsUsed / seatsLimit) * 100)} className="h-1.5" />
+                <Progress
+                  value={Math.min(100, (seatsUsed / seatsLimit) * 100)}
+                  tone={seatsUsed >= seatsLimit ? "destructive" : seatsUsed / seatsLimit >= 0.8 ? "warning" : "success"}
+                  className="h-1.5"
+                />
               )}
             </div>
           )}
@@ -152,7 +160,7 @@ function TeamSettings() {
           <AlertTitle>Over seat limit</AlertTitle>
           <AlertDescription>
             Your team uses {seatsUsed} of {seatsLimit} seats. Existing members keep their access, but new invitations and
-            reactivations are blocked until you remove members or add seats.
+            reactivations are blocked until you remove members or revoke invitations. {upgradeMessage}
           </AlertDescription>
         </Alert>
       )}

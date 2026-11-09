@@ -5,6 +5,8 @@ import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AuthGuard } from "@/components/layout/auth-guard";
 import { WorkspaceGate } from "@/components/layout/workspace-gate";
+import { NotificationsBell } from "@/components/layout/notifications-bell";
+import { UsageBanner } from "@/components/usage/usage-banner";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 
 // Signed-in workspace pages are private, so keep them out of search results.
@@ -26,7 +28,12 @@ export default async function OrgLayout({ children }: { children: ReactNode }) {
         <SidebarInset className="min-w-0">
           <header className="flex h-14 items-center gap-2 border-b border-border px-4">
             <SidebarTrigger />
+            <div className="ml-auto">
+              <NotificationsBell />
+            </div>
           </header>
+
+          <UsageBanner />
 
           <div className="flex-1 p-6">
             <WorkspaceGate>{children}</WorkspaceGate>

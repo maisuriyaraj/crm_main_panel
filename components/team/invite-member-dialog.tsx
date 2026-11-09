@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUsage } from "@/hooks/useUsage";
+import { FALLBACK_UPGRADE_MESSAGE } from "@/lib/usage/mappers";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -64,6 +66,8 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
   const roles = useAppSelector((state) => state.teamRoles.roles);
   const isSubmitting = useAppSelector((state) => state.teamInvitations.isMutating);
   const assignable = roles.filter((role) => role.assignable);
+  // Only OrbitOps can change a plan today; the API words this for the caller's role.
+  const upgradeMessage = useUsage().summary?.upgradeMessage ?? FALLBACK_UPGRADE_MESSAGE;
 
   const [banner, setBanner] = useState<TeamApiError | null>(null);
   const [linkResult, setLinkResult] = useState<InvitationDelivery | null>(null);
@@ -166,7 +170,8 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
               {seatsFull && (
                 <Alert variant="destructive">
                   <AlertDescription>
-                    You&apos;ve used all {seatsLimit} seats on your plan. Remove a member or contact support to add seats.
+                    You&apos;ve used all {seatsLimit} seats on your plan. Remove a member or revoke an invitation to free one.{" "}
+                    {upgradeMessage}
                   </AlertDescription>
                 </Alert>
               )}

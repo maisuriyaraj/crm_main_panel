@@ -1,10 +1,10 @@
 # Lead assignment and limits
-**SRS section:** 5.7 · **Requirement IDs:** LD-S1, LD-S2 · **Priority:** Must 1, Should 1 · **Feature flag:** crm_enabled
+**SRS section:** 5.7 (and the Tenant Panel side of 3.3's MA-P8) · **Requirement IDs:** LD-S1, LD-S2, MA-P8 · **Priority:** Must 2, Should 1 · **Feature flag:** crm_enabled (Plan & usage and the bell: none)
 **Project:** crm_main_panel (Tenant Panel UI) · **Other side:** [crm_backend](../../../../crm_backend/specs/leads/assignment-limits/spec.md)
-**Overall status in this project:** ❌ (0 of 2 requirements implemented)
+**Overall status in this project:** 🟡 (MA-P8 implemented 2026-11-09; LD-S2 partial, its import report waits for the import feature; LD-S1 not started; manual check pending)
 
 ## Summary
-Auto-assignment rules and the plan's lead limit. Neither is built, so leads can be created without limit. Used by Tenant Admin, Sales Manager.
+Auto-assignment rules and the plan's limits. Since 2026-11-09 the panel shows what the plan allows and uses (Settings > Plan & usage), warns admins across the workspace at 80% and at the limit, shows the limit message when a create is refused, disables New Lead at the lead limit, tells admins about integration leads waiting at the limit, and has a notifications bell. Auto-assignment rules have no screen. Used by every member (Plan & usage, the bell), Tenant Admin (banner, held leads), Sales Manager.
 
 ## Implementation status
 Source: [OrbitOps SRS](../../../../docs/requirements/orbitops-srs.md). A requirement is fully done only when every project's spec shows ✅ or ➖; see the [coverage matrix](../../../../docs/requirements/coverage-matrix.md).
@@ -12,7 +12,36 @@ Source: [OrbitOps SRS](../../../../docs/requirements/orbitops-srs.md). A require
 | Req ID | Requirement | Priority | Status | Evidence | Missing or unclear |
 |---|---|---|---|---|---|
 | LD-S1 | Auto-assignment rules: round-robin or by source/category to a user or team. | Should | ❌ | — | No rules screen. |
-| LD-S2 | Lead creation (manual, import or integration) stops at the plan's max-leads limit, with a message to the tenant admin; imports report how many rows were skipped. | Must | ❌ | — | No limit message. |
+| LD-S2 | Lead creation (manual, import or integration) stops at the plan's max-leads limit, with a message to the tenant admin; imports report how many rows were skipped. | Must | 🟡 | `app/[orgnization]/leads/page.tsx` (`atLeadLimit`, the create `onFailure`), `lib/usage/mappers.ts` (`limitRefusalFrom`, `leadsFull`), `components/usage/held-leads-notice.tsx`, `components/usage/usage-banner.tsx`, `app/[orgnization]/settings/usage/page.tsx` | The Add Lead form shows the API's limit message on 409 `LIMIT_REACHED`; New Lead is disabled with a tooltip, and a notice shows, while leads are full; admins see the held integration leads. **The panel has no bulk create and no import**, so there is nothing to change there; the import result (created, skipped over limit) waits for the import feature (LD-A5) on both sides. Not covered by tests. Manual check pending. |
+| MA-P8 (SRS 3.3, Tenant Panel side) | Limits shall be enforced in the Tenant Panel: at the limit, creation is blocked with an upgrade message; at 80% and 100%, a usage alert fires (see 3.11). | Must | ✅ | `app/[orgnization]/settings/usage/page.tsx`, `components/usage/usage-meter.tsx`, `components/usage/usage-banner.tsx`, `components/layout/notifications-bell.tsx`, `lib/store/slices/usageSlice.ts`, `lib/store/slices/notificationsSlice.ts`, `hooks/useUsage.ts`, `components/team/invite-member-dialog.tsx`, `app/[orgnization]/settings/team/page.tsx`, `components/leads/lead-attachments.tsx`, `lib/leads/attachments.ts` (`storageFullMessage`) | Leads, seats and storage refusals show the upgrade wording for the caller's role; the 80% and 100% alerts reach admins as a banner and as bell notifications (the backend also emails them). Not covered by tests. Manual check pending. |
+
+## Decisions (UI, 2026-11-09)
+Decided by Raj. Change only through `/sdd-change`.
+- **Settings > Plan & usage** (`/[org]/settings/usage`, `pageRoutes.settingsUsage`), linked in the sidebar footer for every member (no permission: the API answers any active member). It shows the plan name, the upgrade message, and four meters: Team members, Leads, Storage (with the file count) and API. Each meter shows used of limit, a bar and the state in words; "Unlimited" and no bar where there is no limit; "(platform default)" where the limit is the platform's. The API meter is the busiest minute of the last 7 days against the per-minute limit, with the 30-day requests and rate-limit refusals beside it. A Refresh button re-reads.
+- **Bar colours:** green within the limit, amber from 80%, red at 100% (`Progress` gained a `tone` variant; the theme gained a `warning` token and registers `success`). The state is always also written out, never colour alone. A bar over 100% is drawn full.
+- **Who is an admin** is the API's `is_admin` on `GET /app/usage`, and the wording is its `upgrade_message`: admins "Contact the OrbitOps team to upgrade your plan.", others "Ask your admin to upgrade the plan.". This is the one place the panel follows an admin flag rather than a permission key, because the backend chose the audience (the same admin-tier members its alerts go to); the panel never decides it from a role name.
+- **The banner** shows across the workspace, below the top bar, for admins only, when any measure is at warning or full: which measures, the upgrade message and a link to Plan & usage. Red when anything is full, amber otherwise. Hidden on Plan & usage itself. Usage is re-read every 5 minutes and after each lead create.
+- **Leads:** on 409 `LIMIT_REACHED` the Add Lead form's error toast is the API's message (it names the limit and ends with the upgrade wording), not "Couldn't create lead". While leads are full, New Lead is disabled with a tooltip and a red notice explains it. The form still closes on submit, so what was typed is lost on a refusal; reopening is blocked by the disabled button.
+- **Held integration leads** (admins only; the panel calls `GET /app/usage/held-leads` only when `is_admin` is true): "N leads from your integrations are waiting because the lead limit is reached; they will be added automatically when there is room", with the oldest date and any too old to be added on their own. On Leads and on Plan & usage.
+- **The bell** in the top bar for every member: the unread count (99+ above 99), the latest 20, unread ones marked, polled every minute and re-read on open. Opening one marks it read; a usage notification also goes to Plan & usage. No "mark all read" (the backend has no route).
+- **Seats:** the invite dialog's full message is now "You've used all N seats on your plan. Remove a member or revoke an invitation to free one." plus the upgrade message; the Team page's over-limit notice ends the same way, and its seat bar uses the same colours. Refusals from the API (invite, reactivate) already carry the wording in their message.
+- **Storage:** the attachment upload's storage-full message ends with the role's upgrade wording when usage is loaded (the old generic advice otherwise).
+
+## Built from the backend list (usage limits, 2026-11-09)
+Built on 2026-11-09 (see Decisions above); kept as the list the screens were made from.
+The backend built LD-S2 and MA-P8 on 2026-11-09; routes and shapes are in the [backend spec](../../../../crm_backend/specs/leads/assignment-limits/spec.md) (API) and [plans-subscriptions](../../../../crm_backend/specs/master-admin/plans-subscriptions/spec.md), "Usage limits and alerts". The panel still needs:
+- **Lead limit refusal:** `POST /leads` answers 409 `LIMIT_REACHED` `{ limit: 'max_leads', used, allowed, is_admin, upgrade_message, message }`. Show `message` (it already ends with the right upgrade text) in the Add Lead form and quick-add, and keep what was typed. No upgrade button: tenants cannot upgrade themselves yet.
+- **Seat and storage refusals** now carry the same: 409 `SEAT_LIMIT_REACHED` (`data.is_admin`, `data.upgrade_message`) when inviting or reactivating (a suspended member no longer holds a seat, so reactivating can now be refused), and 413 `STORAGE_QUOTA_EXCEEDED` (`limit`, `used`, `allowed`, `is_admin`, `upgrade_message`) on upload.
+- **Usage view** (Settings, SH-S3): `GET /app/usage`, readable by every member: users, leads, storage and API, each `used` of `limit` with a bar and its `state` in words (`ok`, `warning` at 80%, `full` at 100%); `unlimited: true` shows "Unlimited" and no bar. Show `upgrade_message` near a warning or full measure.
+- **Held integration leads** (admins only, `is_admin` true): `GET /app/usage/held-leads` → "N leads from your integrations are waiting since <oldest_at>; they are added automatically once there is room." Mention `too_old_to_release` when above 0. Others get 403; do not call it for them.
+- **Bell** (SH-NT1, SH-NT2 in tenant-shell/notifications): `GET /app/notifications` (`unread`, `page`, `limit`; answers `unread_count` for the badge) and `POST /app/notifications/:id/read`. The types from this work are `usage.limit_warning`, `usage.limit_reached` and `usage.leads_held`; show `payload.message`, and open the usage view on click.
+- **Import (LD-A5):** when built, its result must show `skipped_over_limit` beside the other skip reasons.
+
+## Tests
+By Raj's decision no new test files were written. `npm test` 92 of 92, `npx tsc --noEmit` clean and `npm run build` succeed. `npm run lint` reports 217 problems both before and after this work (all in older files; none in the files added or changed here, except an `any` already on the Leads page). No existing test changed. Not covered by tests: everything above. Manual check pending (a browser run).
 
 ## Out-of-SRS behaviour
 None found.
+
+## Change Request History
+- 2026-11-09: MA-P8 and LD-S2 (panel side) built: Settings > Plan & usage, the admins' usage banner, the limit message on lead create, New Lead disabled at the lead limit, the held integration leads notice, the notifications bell, and the seat and storage messages in the new upgrade wording. No bulk create or import exists to change. No new test files, by Raj's decision. Asked by Raj.

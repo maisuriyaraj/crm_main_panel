@@ -58,6 +58,11 @@ import { KanbanBoard } from "@/components/leads/kanban-board";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadAnalytics } from "@/components/leads/lead-analytics";
 import { NoAccess } from "@/components/auth/no-access";
+import { HeldLeadsNotice } from "@/components/usage/held-leads-notice";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useUsage } from "@/hooks/useUsage";
+import { formatCount, leadsFull, limitRefusalFrom } from "@/lib/usage/mappers";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type ViewMode = "list" | "kanban" | "analytics";
 
@@ -96,6 +101,9 @@ function LeadsWorkspace() {
   const canBulk = can("leads.bulk");
   const canConvert = canAll(["leads.update", "contacts.create"]);
   const canLookupMembers = can("members.lookup");
+  // At the plan's lead limit the API refuses every new lead, so say so up front.
+  const { summary: usage, refresh: refreshUsage } = useUsage();
+  const atLeadLimit = leadsFull(usage);
 
   const { leads, isLoading } = useAppSelector((state) => state.leads);
   const apiStatuses = useAppSelector((state) => state.leads.statuses);
@@ -184,8 +192,18 @@ function LeadsWorkspace() {
           onSuccess: () => {
             notify("Lead created.", { type: "success" });
             refreshLeads();
+            refreshUsage();
           },
-          onFailure: () => notify("Couldn't create lead. Please try again.", { type: "error" }),
+          onFailure: (error: unknown) => {
+            // The API's message names the limit and ends with what the caller can do.
+            const refusal = limitRefusalFrom(error);
+            if (refusal) {
+              notify(refusal.message, { type: "error" });
+              refreshUsage();
+              return;
+            }
+            notify("Couldn't create lead. Please try again.", { type: "error" });
+          },
         }),
       );
       return;
@@ -526,14 +544,43 @@ function LeadsWorkspace() {
           onOpenChange={setFormOpen}
           onSubmit={handleFormSubmit}
           trigger={
-            canCreate ? (
+            canCreate && !atLeadLimit ? (
               <Button onClick={openCreate}>
                 <Plus className="h-4 w-4" /> New Lead
               </Button>
             ) : undefined
           }
         />
+        {canCreate && atLeadLimit && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* A disabled button gets no pointer events, so the span carries the tooltip. */}
+                <span tabIndex={0} className="inline-flex">
+                  <Button disabled aria-describedby="lead-limit-tooltip">
+                    <Plus className="h-4 w-4" /> New Lead
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent id="lead-limit-tooltip" className="max-w-xs">
+                Your plan&apos;s lead limit is reached. {usage?.upgradeMessage}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
+
+      {atLeadLimit && usage?.measures.leads && (
+        <Alert variant="destructive">
+          <AlertTitle>Lead limit reached</AlertTitle>
+          <AlertDescription>
+            Your organization has {formatCount(usage.measures.leads.used)} of the {formatCount(usage.measures.leads.limit ?? 0)} leads
+            its plan allows, so no new leads can be added. Existing leads are kept. {usage.upgradeMessage}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <HeldLeadsNotice />
 
       <Tabs value={view} onValueChange={(v) => setView(v as ViewMode)}>
         <TabsList>

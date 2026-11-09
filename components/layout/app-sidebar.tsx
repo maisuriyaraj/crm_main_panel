@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import { Building2, ChevronRight, LogOut, Moon, Plug, Rocket, ShieldCheck, Sun } from "lucide-react";
+import { Building2, ChevronRight, Gauge, LogOut, Moon, Plug, Rocket, ShieldCheck, Sun } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAppSelector } from "@/lib/store/hooks";
@@ -121,6 +121,15 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
+          {/* Every member may see the plan's limits and usage. */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Plan & usage" isActive={isActive(buildHref(pageRoutes.settingsUsage))}>
+              <Link href={buildHref(pageRoutes.settingsUsage)}>
+                <Gauge />
+                <span>Plan &amp; usage</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="Security" isActive={isActive(buildHref(pageRoutes.settingsSecurity))}>
               <Link href={buildHref(pageRoutes.settingsSecurity)}>

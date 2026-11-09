@@ -40,6 +40,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  /* Usage and limit states: ok (success), nearing a limit (warning). */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -105,6 +108,7 @@
   --glass: oklch(1 0 0 / 68%);
   --cyan: oklch(0.70 0.12 160);
   --success: oklch(0.72 0.19 145);
+  --warning: oklch(0.77 0.16 75);
   --shadow-primary: 0 16px 40px -16px color-mix(in oklab, var(--primary) 52%, transparent);
   --shadow-panel: 0 30px 80px -32px oklch(0.25 0.08 135 / 28%);
 }
@@ -148,6 +152,7 @@
   --glass: oklch(0.2 0.04 135 / 70%);
   --cyan: oklch(0.76 0.14 160);
   --success: oklch(0.76 0.18 145);
+  --warning: oklch(0.82 0.15 80);
   --shadow-primary: 0 16px 40px -16px color-mix(in oklab, var(--primary) 65%, transparent);
   --shadow-panel: 0 30px 80px -32px oklch(0.04 0.02 135 / 70%);
 }

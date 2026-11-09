@@ -13,6 +13,8 @@ import leadAttachmentsReducer from "./slices/leadAttachmentsSlice";
 import featuresReducer from "./slices/featuresSlice";
 import onboardingReducer from "./slices/onboardingSlice";
 import adIntegrationsReducer from "./slices/adIntegrationsSlice";
+import usageReducer from "./slices/usageSlice";
+import notificationsReducer from "./slices/notificationsSlice";
 import { onSessionEnded } from "@/lib/auth/session";
 
 // Import additional slice reducers here as the project grows
@@ -32,6 +34,8 @@ const appReducer = combineReducers({
   features: featuresReducer,
   onboarding: onboardingReducer,
   adIntegrations: adIntegrationsReducer,
+  usage: usageReducer,
+  notifications: notificationsReducer,
   // Add more reducers here as you create new slices
 });
 
