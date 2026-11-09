@@ -1,6 +1,6 @@
 import axios from "axios";
 import { apiRoutes, apiUrl, pageRoutes } from "@/lib/constants";
-import { handleCookieActions, handleLocalStorageActions } from "@/lib/commonFunctions";
+import { handleCookieActions } from "@/lib/commonFunctions";
 
 // Lifetime of the routing hint below; matches the refresh token's 45 days.
 const USER_HINT_MAX_AGE_S = 45 * 24 * 60 * 60;
@@ -9,15 +9,30 @@ type SignedInProfile = { organizationId: number | string; mustResetPassword?: bo
 
 // After sign-in: the proxy routes by the org id, and the invitation page
 // compares the email. That is all the JS-readable `user` cookie carries;
-// permissions and the rest of the profile stay out of every request.
+// permissions and the rest of the profile stay in memory only.
 export const rememberSignedInUser = (profile: SignedInProfile) => {
-    handleLocalStorageActions("set", "user", profile);
     handleCookieActions("set", "user", {
         organizationId: profile.organizationId,
         mustResetPassword: !!profile.mustResetPassword,
         email: profile.email,
     }, { expires: USER_HINT_MAX_AGE_S });
 };
+
+// Older builds kept the access token and the profile in localStorage, where any
+// script on the page could read them. The token now lives only in the HttpOnly
+// cookie, so whatever an earlier version left behind is removed on every load.
+const LEGACY_STORAGE_KEYS = ["accessToken", "token", "user"];
+
+export const clearLegacyStorage = () => {
+    if (typeof window === "undefined") return;
+    try {
+        LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    } catch {
+        // Storage can be unavailable (privacy mode); nothing to clear then.
+    }
+};
+
+clearLegacyStorage();
 
 // Device preferences that aren't tied to who is signed in survive a logout.
 const PRESERVED_LOCAL_STORAGE_KEYS = ["theme"];
@@ -43,6 +58,15 @@ export const registerExpiredNotice = (handler: ExpiredNoticeHandler) => {
 };
 
 export const isSessionEnded = () => sessionEnded;
+
+// While a signed-in member sets up MFA after changing their password, this tab has
+// no session on purpose (the change ended them all). A background request failing
+// to refresh then must not sign them out in the middle of the set-up.
+let mfaStepHold = false;
+export const holdForMfaStep = (on: boolean) => {
+    mfaStepHold = on;
+};
+export const isHeldForMfaStep = () => mfaStepHold;
 
 export const getSessionSignal = () => pendingRequests.signal;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +9,9 @@ import { Lock } from "lucide-react";
 
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { endSession } from "@/lib/auth/session";
+import { endSession, rememberSignedInUser } from "@/lib/auth/session";
+import { challengeFrom, type MfaChallenge } from "@/lib/auth/mfa";
+import { MfaSignIn } from "@/components/auth/mfa/mfa-sign-in";
 import { reqToFetchMe, reqToResetPassword } from "@/lib/store/slices/authSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { notify } from "@/lib/commonFunctions";
@@ -42,6 +44,9 @@ export default function ResetPasswordPage() {
   const router = useRouter();
   const { user, isAuthChecked, needResetPassword } = useAuth();
   const sessionCheckFailed = useAppSelector((state) => state.auth.sessionCheckFailed);
+  // When the organization requires MFA and this member has none, the new
+  // password leads into setting it up instead of a session. Held here only.
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
 
   const form = useForm<ResetPasswordValues>({
     resolver: zodResolver(resetPasswordSchema),
@@ -59,29 +64,42 @@ export default function ResetPasswordPage() {
 
     // Same rule as AuthGuard: a dead session exits through endSession so
     // cookies and storage are cleared, and a transient failure doesn't.
+    // The MFA set-up has no session yet, by design; it is not a dead session.
+    if (challenge) return;
     if (!user && !needResetPassword && !sessionCheckFailed) {
       void endSession();
     }
-  }, [isAuthChecked, user, needResetPassword, sessionCheckFailed]);
+  }, [isAuthChecked, user, needResetPassword, sessionCheckFailed, challenge]);
+
+  const enterWorkspace = () => {
+    dispatch(
+      reqToFetchMe({
+        data: null,
+        onSuccess: (me: { data: any }) => {
+          rememberSignedInUser(me.data);
+          router.replace(buildOrgRoute(String(me?.data?.organizationId), pageRoutes.dashboard));
+        },
+        onFailure: () => {
+          notify("Password updated. Please sign in again.", { type: "info" });
+          router.replace(pageRoutes.signin);
+        },
+      }),
+    );
+  };
 
   const onSubmit = (values: ResetPasswordValues) => {
     dispatch(
       reqToResetPassword({
         data: { new_password: values.newPassword, new_creation : 1},
-        onSuccess: () => {
+        onSuccess: (result: unknown) => {
+          const step = challengeFrom(result);
+          if (step) {
+            notify("Password updated. Now set up multi-factor sign-in.", { type: "success" });
+            setChallenge(step);
+            return;
+          }
           notify("Password updated. Welcome in!", { type: "success" });
-          dispatch(
-            reqToFetchMe({
-              data: null,
-              onSuccess: (me: { data:any }) => {
-                router.replace(buildOrgRoute(String(me?.data?.organizationId), pageRoutes.dashboard));
-              },
-              onFailure: () => {
-                notify("Password updated. Please sign in again.", { type: "info" });
-                router.replace(pageRoutes.signin);
-              },
-            }),
-          );
+          enterWorkspace();
         },
         onFailure: () => {
           notify("Couldn't update your password. Please try again.", { type: "error" });
@@ -97,6 +115,18 @@ export default function ResetPasswordPage() {
       </div>
 
       <div className="relative z-10 w-full max-w-md rounded-3xl border border-border bg-glass backdrop-blur-xl p-8 panel-shadow">
+        {challenge ? (
+          <MfaSignIn
+            challenge={challenge}
+            onSignedIn={enterWorkspace}
+            onStepEnded={(message) => {
+              notify(message, { type: "info" });
+              router.replace(pageRoutes.signin);
+            }}
+            onCancel={() => void endSession("logout")}
+          />
+        ) : (
+        <>
         <h1 className="text-3xl font-bold">Set a New Password</h1>
 
         <p className="mt-2 text-muted-foreground">
@@ -144,6 +174,8 @@ export default function ResetPasswordPage() {
             </Button>
           </form>
         </Form>
+        </>
+        )}
       </div>
     </div>
   );

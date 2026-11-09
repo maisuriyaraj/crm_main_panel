@@ -44,6 +44,7 @@ export const mapMemberFromApi = (raw: any): TeamMember => ({
   createdAt: raw.created_at,
   lastLoginAt: optional(raw.last_login_at),
   isSelf: raw.is_self === true,
+  mfaEnabled: raw.mfa_enabled === true,
   allowedActions: Array.isArray(raw.allowed_actions) ? raw.allowed_actions : [],
 });
 

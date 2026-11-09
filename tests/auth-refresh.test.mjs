@@ -84,3 +84,11 @@ test("a 401 from the refresh call itself is never refreshed recursively", async 
     await assert.rejects(Axios.post("/auth/refresh"), (e) => e.response.status === 401);
     assert.equal(backend.count("/api/auth/refresh"), 1);
 });
+
+test("after a reload with no access cookie: the first request refreshes once and succeeds", async () => {
+    backend.state.access = "missing";
+    const res = await Axios.get("/auth/me");
+    assert.equal(res.status, 200);
+    assert.equal(backend.count("/api/auth/refresh"), 1);
+    assert.equal(backend.count("/api/auth/me"), 2);
+});

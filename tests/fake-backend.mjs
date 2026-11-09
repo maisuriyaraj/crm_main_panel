@@ -4,7 +4,7 @@ import axios, { AxiosError } from "axios";
 
 export const createFakeBackend = () => {
     const state = {
-        access: "valid",      // "valid" | "expired" | "invalid" | "forbidden"
+        access: "valid",      // "valid" | "expired" | "missing" | "invalid" | "forbidden"
         refresh: "ok",        // "ok" | "401" | "network" | "500"
         retryStays401: false, // replayed request still 401s after a refresh
         calls: [],
@@ -44,6 +44,8 @@ export const createFakeBackend = () => {
         if (state.access === "expired" || (state.retryStays401 && timesSeen > 1)) {
             return reply(config, 401, { message: "Invalid token", code: "TOKEN_EXPIRED" });
         }
+        // After a reload the short-lived access cookie may be gone while the refresh cookie remains.
+        if (state.access === "missing") return reply(config, 401, { message: "Token is required", code: "TOKEN_MISSING" });
         if (state.access === "invalid") return reply(config, 401, { message: "Invalid token", code: "TOKEN_INVALID" });
         if (state.access === "revoked") return reply(config, 401, { message: "Your session has ended", code: "SESSION_REVOKED" });
         if (state.access === "forbidden") return reply(config, 403, { message: "Admin permission required" });

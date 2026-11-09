@@ -135,6 +135,14 @@ export const reqToRevokeOrgUserSessions = memberMutation(
     "Failed to sign member out",
 );
 
+// Clears the member's MFA and signs them out everywhere; they set it up again at
+// their next sign-in only if the organization requires it.
+export const reqToResetOrgUserMfa = memberMutation(
+    "orgUsers/reqToResetOrgUserMfa",
+    ({ id, reason }) => Axios.post(`${apiRoutes.appUsers}/${id}/mfa/reset`, reason ? { reason } : {}),
+    "Failed to reset MFA",
+);
+
 export const reqToDeleteOrgUser = memberMutation(
     "orgUsers/reqToDeleteOrgUser",
     ({ id, reassignToUserId }) =>
@@ -176,6 +184,7 @@ const mutations = [
     reqToSuspendOrgUser,
     reqToReactivateOrgUser,
     reqToRevokeOrgUserSessions,
+    reqToResetOrgUserMfa,
     reqToDeleteOrgUser,
     reqToTransferOwnership,
 ];

@@ -17,6 +17,10 @@ export interface AuthUser {
     organizationStatus?: string | null;
     fullName: string;
     mustResetPassword: boolean;
+    mfaEnabled?: boolean;
+    organizationMfaRequired?: boolean;
+    // True only for a member who may run the setup wizard, until it is finished.
+    onboardingPending?: boolean;
 }
 
 interface AuthState {
@@ -39,6 +43,20 @@ const initialState: AuthState = {
     sessionCheckFailed: false,
 };
 
+// Thunk results are copied into the dispatched action (and the Redux devtools
+// log), so an answer is returned without its access token or MFA token. Callers
+// that need the MFA step read it from `onSuccess`, which gets the raw answer.
+const withoutTokens = (body: unknown) => {
+    if (!body || typeof body !== "object") return body;
+    const envelope = body as { data?: unknown };
+    if (!envelope.data || typeof envelope.data !== "object") return body;
+    const data = { ...(envelope.data as Record<string, unknown>) };
+    delete data.accessToken;
+    delete data.mfa_token;
+    delete data.recovery_codes;
+    return { ...envelope, data };
+};
+
 // Dispatched by lib/auth/session when the session ends; the root reducer
 // resets every slice on it so no previous user's data stays in memory.
 export const sessionEnded = createAction("auth/sessionEnded");
@@ -56,7 +74,7 @@ export const reqToLogin = createAsyncThunk<
 
             onSuccess?.(response.data);
 
-            return response.data;
+            return withoutTokens(response.data);
         } catch (error: any) {
             onFailure?.(error);
 
@@ -175,7 +193,7 @@ export const reqToAcceptInvitation = createAsyncThunk<
 
             onSuccess?.(response.data);
 
-            return response.data;
+            return withoutTokens(response.data);
         } catch (error: any) {
             onFailure?.(error);
 
@@ -201,8 +219,7 @@ export const reqToResetPassword = createAsyncThunk<
             const result = response.data?.data;
 
             onSuccess?.(result);
-
-            return result;
+            return (withoutTokens({ data: result }) as { data?: unknown }).data;
         } catch (error: any) {
             onFailure?.(error);
 

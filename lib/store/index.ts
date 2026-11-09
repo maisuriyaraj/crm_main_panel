@@ -11,6 +11,8 @@ import teamAuditReducer from "./slices/teamAuditSlice";
 import permissionCatalogReducer from "./slices/permissionCatalogSlice";
 import leadAttachmentsReducer from "./slices/leadAttachmentsSlice";
 import featuresReducer from "./slices/featuresSlice";
+import onboardingReducer from "./slices/onboardingSlice";
+import adIntegrationsReducer from "./slices/adIntegrationsSlice";
 import { onSessionEnded } from "@/lib/auth/session";
 
 // Import additional slice reducers here as the project grows
@@ -28,6 +30,8 @@ const appReducer = combineReducers({
   permissionCatalog: permissionCatalogReducer,
   leadAttachments: leadAttachmentsReducer,
   features: featuresReducer,
+  onboarding: onboardingReducer,
+  adIntegrations: adIntegrationsReducer,
   // Add more reducers here as you create new slices
 });
 

@@ -33,6 +33,8 @@ export interface TeamMember {
   createdAt: string;
   lastLoginAt?: string;
   isSelf: boolean;
+  // Whether the member signs in with a code from an authenticator app.
+  mfaEnabled: boolean;
   allowedActions: MemberAction[];
 }
 

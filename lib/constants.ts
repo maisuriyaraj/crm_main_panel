@@ -13,6 +13,8 @@ export const pageRoutes = {
     dashboard: "/dashboard",
     settingsTeam: "/settings/team",
     settingsSecurity: "/settings/security",
+    setup: "/setup",
+    settingsIntegrations: "/settings/integrations",
     settingsTeamRoles: "/settings/team/roles",
     settingsTeamRoleNew: "/settings/team/roles/new",
     leads: "/leads",
@@ -75,4 +77,24 @@ export const apiRoutes = {
     contactNotes: "/contacts/notes",
     features: "/features",
     storageUsage: "/storage/usage",
+    // Multi-factor sign-in: the three sign-in steps take the short-lived MFA token,
+    // the rest act on the signed-in member.
+    mfaEnrollStart: "/auth/mfa/enroll/start",
+    mfaEnrollConfirm: "/auth/mfa/enroll/confirm",
+    mfaVerify: "/auth/mfa/verify",
+    mfaStatus: "/auth/mfa",
+    mfaSetupStart: "/auth/mfa/setup/start",
+    mfaSetupConfirm: "/auth/mfa/setup/confirm",
+    mfaDisable: "/auth/mfa/disable",
+    mfaRecoveryCodes: "/auth/mfa/recovery-codes",
+    mfaPolicy: "/app/security/mfa-policy",
+    // First-login setup wizard and the organization logo.
+    onboarding: "/app/onboarding",
+    onboardingCompany: "/app/onboarding/company",
+    onboardingLocale: "/app/onboarding/locale",
+    onboardingLogo: "/app/onboarding/logo",
+    onboardingComplete: "/app/onboarding/complete",
+    organizationLogo: "/app/organization/logo",
+    // Connecting Meta and Google ad accounts ("/{provider}/connect", "/{provider}/accounts", "/{provider}").
+    adIntegrations: "/app/integrations/ads",
 }

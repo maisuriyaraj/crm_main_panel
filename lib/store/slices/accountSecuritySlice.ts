@@ -72,9 +72,12 @@ export const reqToChangePassword = createAsyncThunk<Envelope<unknown>, ThunkArg<
         try {
             // The backend ends every other session and re-issues this
             // browser's cookies, so the current tab stays signed in.
+            // When the organization requires MFA and this member has none, the
+            // answer is the MFA set-up step instead (read it from onSuccess).
             const response = await Axios.post(apiRoutes.changePassword, data);
             onSuccess?.(response.data);
-            return response.data;
+            // The result lands in the Redux action log, so no token goes with it.
+            return { message: response.data?.message, status: response.data?.status };
         } catch (error) {
             onFailure?.(error);
             return rejectWithValue(rejectMessage(error, "Couldn't change the password"));

@@ -18,6 +18,7 @@ import { InvitationsTab } from "@/components/team/invitations-tab";
 import { ActivityTab } from "@/components/team/activity-tab";
 import { InviteMemberDialog } from "@/components/team/invite-member-dialog";
 import { RolesTab } from "@/components/team/roles-tab";
+import { MfaPolicyCard } from "@/components/team/mfa-policy-card";
 
 type TeamTab = "members" | "invitations" | "roles" | "activity";
 
@@ -155,6 +156,8 @@ function TeamSettings() {
           </AlertDescription>
         </Alert>
       )}
+
+      <MfaPolicyCard canManage={can("team.manage")} version={version} />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="max-w-full overflow-x-auto">

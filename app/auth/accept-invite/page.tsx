@@ -10,7 +10,9 @@ import { Lock, User } from "lucide-react";
 
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { handleCookieActions, notify } from "@/lib/commonFunctions";
-import { rememberSignedInUser } from "@/lib/auth/session";
+import { endSession, rememberSignedInUser } from "@/lib/auth/session";
+import { challengeFrom, type MfaChallenge } from "@/lib/auth/mfa";
+import { MfaSignIn } from "@/components/auth/mfa/mfa-sign-in";
 import { useAppDispatch } from "@/lib/store/hooks";
 import {
   reqToAcceptInvitation,
@@ -50,7 +52,9 @@ type PageState =
   | { kind: "loading" }
   | { kind: "invalid"; message?: string }
   | { kind: "signed-in-elsewhere"; preview: InvitationPreview; signedInAs: string }
-  | { kind: "ready"; preview: InvitationPreview };
+  | { kind: "ready"; preview: InvitationPreview }
+  // The organization requires MFA: the new member sets it up before any access.
+  | { kind: "mfa"; challenge: MfaChallenge };
 
 const INVALID_MESSAGE = "This invitation link is no longer valid. Ask your administrator to send a new one.";
 
@@ -137,6 +141,25 @@ export default function AcceptInvitePage() {
     dispatch(reqToLogout({ data: null, onSuccess: done, onFailure: done }));
   };
 
+  const enterWorkspace = (done: () => void = () => undefined) => {
+    dispatch(
+      reqToFetchMe({
+        data: null,
+        onSuccess: (me: { data: any }) => {
+          rememberSignedInUser(me.data);
+          notify(`Welcome to ${me.data?.organizationName ?? "your new workspace"}!`, { type: "success" });
+          router.replace(buildOrgRoute(String(me.data?.organizationId), pageRoutes.dashboard));
+          done();
+        },
+        onFailure: () => {
+          notify("You've joined. Please sign in to continue.", { type: "info" });
+          router.replace(pageRoutes.signin);
+          done();
+        },
+      }),
+    );
+  };
+
   const onSubmit = (values: AcceptValues) => {
     const token = tokenRef.current;
     if (!token) return;
@@ -145,23 +168,14 @@ export default function AcceptInvitePage() {
       dispatch(
         reqToAcceptInvitation({
           data: { token, fullName: values.fullName, password: values.password },
-          onSuccess: () => {
-            dispatch(
-              reqToFetchMe({
-                data: null,
-                onSuccess: (me: { data: any }) => {
-                  rememberSignedInUser(me.data);
-                  notify(`Welcome to ${me.data?.organizationName ?? "your new workspace"}!`, { type: "success" });
-                  router.replace(buildOrgRoute(String(me.data?.organizationId), pageRoutes.dashboard));
-                  resolve();
-                },
-                onFailure: () => {
-                  notify("You've joined. Please sign in to continue.", { type: "info" });
-                  router.replace(pageRoutes.signin);
-                  resolve();
-                },
-              }),
-            );
+          onSuccess: (body: unknown) => {
+            const step = challengeFrom(body);
+            if (step) {
+              setState({ kind: "mfa", challenge: step });
+              resolve();
+              return;
+            }
+            enterWorkspace(resolve);
           },
           onFailure: (error: any) => {
             const body = error?.response?.data;
@@ -200,6 +214,18 @@ export default function AcceptInvitePage() {
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
+        )}
+
+        {state.kind === "mfa" && (
+          <MfaSignIn
+            challenge={state.challenge}
+            onSignedIn={() => enterWorkspace()}
+            onStepEnded={(message) => {
+              notify(`You've joined. ${message}`, { type: "info" });
+              router.replace(pageRoutes.signin);
+            }}
+            onCancel={() => void endSession("logout")}
+          />
         )}
 
         {state.kind === "invalid" && (

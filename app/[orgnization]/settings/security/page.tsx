@@ -14,7 +14,7 @@ import {
   type AuthSessionInfo,
 } from "@/lib/store/slices/accountSecuritySlice";
 import { reqToLogoutAll } from "@/lib/store/slices/authSlice";
-import { endSession } from "@/lib/auth/session";
+import { endSession, holdForMfaStep } from "@/lib/auth/session";
 import { authErrorMessage } from "@/lib/auth/errors";
 import { newPasswordPairSchema, PASSWORD_MIN } from "@/lib/auth/passwordPolicy";
 import { notify } from "@/lib/commonFunctions";
@@ -35,6 +35,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { PasswordInput } from "@/components/auth/password-input";
+import { MfaSettingsCard } from "@/components/auth/mfa/mfa-settings-card";
+import { MfaSignIn } from "@/components/auth/mfa/mfa-sign-in";
+import { challengeFrom, type MfaChallenge } from "@/lib/auth/mfa";
+import { reqToRefreshProfile } from "@/lib/store/slices/authSlice";
 
 // Every signed-in user manages their own password and devices, so this page
 // needs no permission: the API only ever acts on the caller's own account.
@@ -45,9 +49,10 @@ export default function SecuritySettingsPage() {
         <h1 className="flex items-center gap-2 text-2xl font-bold">
           <ShieldCheck className="size-6 text-primary" aria-hidden /> Security
         </h1>
-        <p className="mt-1 text-muted-foreground">Change your password and see where you&apos;re signed in.</p>
+        <p className="mt-1 text-muted-foreground">Change your password, set up multi-factor sign-in and see where you&apos;re signed in.</p>
       </div>
       <ChangePasswordCard />
+      <MfaSettingsCard />
       <SessionsCard />
     </div>
   );
@@ -66,6 +71,10 @@ type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 function ChangePasswordCard() {
   const dispatch = useAppDispatch();
   const [formError, setFormError] = useState<string | null>(null);
+  // A changed password ends every session. When the organization requires MFA and
+  // this member has none, the answer is the MFA set-up step, held here only.
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
+  useEffect(() => () => holdForMfaStep(false), []);
   const form = useForm<ChangePasswordValues>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
@@ -74,8 +83,10 @@ function ChangePasswordCard() {
   const onSubmit = async (values: ChangePasswordValues) => {
     setFormError(null);
     let failure: unknown = null;
+    let answer: unknown = null;
     const action = await dispatch(reqToChangePassword({
       data: { current_password: values.currentPassword, new_password: values.newPassword },
+      onSuccess: (body: unknown) => { answer = body; },
       onFailure: (error: unknown) => { failure = error; },
     }));
     if (reqToChangePassword.rejected.match(action)) {
@@ -87,6 +98,12 @@ function ChangePasswordCard() {
       return;
     }
     form.reset();
+    const step = challengeFrom(answer);
+    if (step) {
+      holdForMfaStep(true);
+      setChallenge(step);
+      return;
+    }
     notify("Password changed. You've been signed out on your other devices.", { type: "success" });
     dispatch(reqToGetSessions({ data: null }));
   };
@@ -98,6 +115,27 @@ function ChangePasswordCard() {
         <CardDescription>Changing it signs you out everywhere except this browser.</CardDescription>
       </CardHeader>
       <CardContent>
+        {challenge ? (
+          <MfaSignIn
+            challenge={challenge}
+            onSignedIn={() => {
+              holdForMfaStep(false);
+              setChallenge(null);
+              notify("Password changed and multi-factor sign-in set up.", { type: "success" });
+              dispatch(reqToRefreshProfile({ data: null }));
+              dispatch(reqToGetSessions({ data: null }));
+            }}
+            onStepEnded={(message) => {
+              holdForMfaStep(false);
+              notify(message, { type: "info" });
+              void endSession();
+            }}
+            onCancel={() => {
+              holdForMfaStep(false);
+              void endSession("logout");
+            }}
+          />
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" noValidate>
             {formError && (
@@ -144,6 +182,7 @@ function ChangePasswordCard() {
             </Button>
           </form>
         </Form>
+        )}
       </CardContent>
     </Card>
   );

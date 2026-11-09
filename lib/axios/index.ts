@@ -1,6 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, apiRoutes } from "@/lib/constants";
-import { endSession, getSessionSignal, isSessionEnded } from "@/lib/auth/session";
+import { endSession, getSessionSignal, isHeldForMfaStep, isSessionEnded } from "@/lib/auth/session";
 
 // Auth lives entirely in HttpOnly cookies set by the backend; the browser
 // attaches them via withCredentials, so no token is ever read or stored here.
@@ -9,9 +9,13 @@ export const Axios = axios.create({
     withCredentials: true,
 });
 
-// These never get a refresh-and-retry: login/logout don't take an access
-// token, and a failing refresh call must not refresh itself.
-const NO_REFRESH_ENDPOINTS: string[] = [apiRoutes.login, apiRoutes.refreshToken, apiRoutes.logout];
+// These never get a refresh-and-retry: login/logout and the MFA sign-in steps
+// don't take an access token (the steps carry their own MFA token), and a
+// failing refresh call must not refresh itself.
+const NO_REFRESH_ENDPOINTS: string[] = [
+    apiRoutes.login, apiRoutes.refreshToken, apiRoutes.logout,
+    apiRoutes.mfaEnrollStart, apiRoutes.mfaEnrollConfirm, apiRoutes.mfaVerify,
+];
 
 // Only an expired or absent access token is worth a refresh. A forged or
 // wrong-scope token ("TOKEN_INVALID"), a 403 or a 400 is not.
@@ -25,6 +29,14 @@ type RetriableConfig = InternalAxiosRequestConfig & { _retry?: boolean };
 let forbiddenListener: (() => void) | null = null;
 export const setForbiddenListener = (listener: (() => void) | null) => {
     forbiddenListener = listener;
+};
+
+// A 403 SUBSCRIPTION_INACTIVE means the organization's subscription has ended:
+// modules are closed but team and settings still work. The workspace layout
+// registers a listener that shows the "subscription has ended" screen.
+let subscriptionInactiveListener: ((status: string | null) => void) | null = null;
+export const setSubscriptionInactiveListener = (listener: ((status: string | null) => void) | null) => {
+    subscriptionInactiveListener = listener;
 };
 
 Axios.interceptors.request.use((config) => {
@@ -52,8 +64,12 @@ const refreshSession = () => {
 
 Axios.interceptors.response.use(
     (response) => response,
-    async (error: AxiosError<{ code?: string }>) => {
+    async (error: AxiosError<{ code?: string; subscription_status?: string }>) => {
         const originalRequest = error.config as RetriableConfig | undefined;
+
+        if (error.response?.status === 403 && error.response.data?.code === "SUBSCRIPTION_INACTIVE") {
+            subscriptionInactiveListener?.(error.response.data.subscription_status ?? null);
+        }
 
         if (
             error.response?.status === 403 &&
@@ -89,7 +105,7 @@ Axios.interceptors.response.use(
             // Only a 401 from the refresh endpoint proves the session is over.
             // Offline, timeouts and 5xx leave the session alone so a blip
             // doesn't sign anyone out.
-            if (axios.isAxiosError(refreshError) && refreshError.response?.status === 401) {
+            if (axios.isAxiosError(refreshError) && refreshError.response?.status === 401 && !isHeldForMfaStep()) {
                 void endSession();
             }
             return Promise.reject(error);

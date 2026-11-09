@@ -12,6 +12,7 @@ import { useAppDispatch } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToLogin } from "@/lib/store/slices/authSlice";
 import { rememberSignedInUser } from "@/lib/auth/session";
 import { authErrorMessage } from "@/lib/auth/errors";
+import { challengeFrom, type MfaChallenge } from "@/lib/auth/mfa";
 import { signInPasswordField } from "@/lib/auth/passwordPolicy";
 import {
   Form,
@@ -26,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/auth/password-input";
 import { AuthSplit } from "@/components/layout/public/AuthSplit";
 import { AuthLayout } from "@/components/layout/public/AuthLayout";
+import { MfaSignIn } from "@/components/auth/mfa/mfa-sign-in";
 
 const signInSchema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
@@ -47,6 +49,9 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [formError, setFormError] = useState<string | null>(null);
+  // The second sign-in step, when the account has MFA on or the organization
+  // requires it. Held here only; it is gone when the page is left.
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
 
   const form = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -61,12 +66,31 @@ function LoginForm() {
     // The thunk's onFailure carries the raw error (status + code); the
     // rejected action only has a message.
     let failure: unknown = null;
-    const login = await dispatch(reqToLogin({ data: values, onFailure: (error: unknown) => { failure = error; } }));
+    let answer: unknown = null;
+    const login = await dispatch(reqToLogin({
+      data: values,
+      onSuccess: (body: unknown) => { answer = body; },
+      onFailure: (error: unknown) => { failure = error; },
+    }));
     if (reqToLogin.rejected.match(login)) {
       setFormError(authErrorMessage(failure, "Invalid email or password."));
       return;
     }
 
+    const step = challengeFrom(answer);
+    if (step) {
+      form.resetField("password");
+      setChallenge(step);
+      return;
+    }
+
+    await finishSignIn();
+  };
+
+  // The session cookies are set (by the password, or by the MFA step): load the
+  // profile and go to the workspace, or to the forced password reset first.
+  const finishSignIn = async () => {
+    setChallenge(null);
     const meAction = await dispatch(reqToFetchMe({ data: null }));
     const profile: { organizationId: number; mustResetPassword: boolean; email: string } | undefined =
       reqToFetchMe.fulfilled.match(meAction) ? meAction.payload?.data : undefined;
@@ -119,6 +143,22 @@ function LoginForm() {
           </div>
         }
       >
+        {challenge ? (
+          <div className="mt-8">
+            <MfaSignIn
+              challenge={challenge}
+              onSignedIn={finishSignIn}
+              onStepEnded={(message) => {
+                setChallenge(null);
+                setFormError(message);
+              }}
+              onCancel={() => {
+                setChallenge(null);
+                form.reset({ email: "", password: "" });
+              }}
+            />
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
             {formError && (
@@ -175,6 +215,7 @@ function LoginForm() {
             </Button>
           </form>
         </Form>
+        )}
 
         <div className="mt-6 text-center text-sm">
           Don&apos;t have an account?{" "}

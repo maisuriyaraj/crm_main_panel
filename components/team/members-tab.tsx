@@ -152,6 +152,13 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
       ),
     },
     {
+      key: "mfa",
+      header: "MFA",
+      className: "hidden sm:table-cell",
+      render: (row) =>
+        row.mfaEnabled ? <Badge variant="secondary">On</Badge> : <span className="text-sm text-muted-foreground">Off</span>,
+    },
+    {
       key: "role",
       header: "Role",
       sortable: true,
@@ -185,6 +192,9 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
       header: <span className="sr-only">Actions</span>,
       render: (row) => {
         const available = ROW_ACTIONS.filter(({ action }) => row.allowedActions.includes(action));
+        // The API offers no separate flag for it: anyone you may sign out, you may
+        // reset, but never yourself, and only when they have MFA on.
+        const canResetMfa = row.mfaEnabled && !row.isSelf && row.allowedActions.includes("revoke_sessions");
         const canRemove = row.allowedActions.includes("remove");
 
         return (
@@ -202,6 +212,9 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
                     {label}
                   </DropdownMenuItem>
                 ))}
+                {canResetMfa && (
+                  <DropdownMenuItem onSelect={() => openAction("reset_mfa", row)}>Reset MFA</DropdownMenuItem>
+                )}
                 {canRemove && (
                   <>
                     <DropdownMenuSeparator />

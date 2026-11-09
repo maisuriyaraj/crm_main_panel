@@ -9,6 +9,7 @@ import {
   reqToGetMemberOptions,
   reqToGetOrgUser,
   reqToReactivateOrgUser,
+  reqToResetOrgUserMfa,
   reqToRevokeOrgUserSessions,
   reqToSuspendOrgUser,
   reqToTransferOwnership,
@@ -17,6 +18,7 @@ import {
 import { reqToRefreshProfile } from "@/lib/store/slices/authSlice";
 import type { TeamMember } from "@/lib/team/types";
 import { useTeamFailure } from "@/hooks/useTeamFailure";
+import { API_ERROR_MESSAGES } from "@/lib/auth/errors";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -46,6 +48,7 @@ export type MemberDialogType =
   | "suspend"
   | "reactivate"
   | "revoke_sessions"
+  | "reset_mfa"
   | "remove"
   | "transfer_ownership";
 
@@ -290,6 +293,51 @@ export function RevokeSessionsDialog({ member, onClose, onDone }: DialogProps) {
   );
 }
 
+export function ResetMfaDialog({ member, onClose, onDone }: DialogProps) {
+  const dispatch = useAppDispatch();
+  const handleFailure = useTeamFailure();
+  const isPending = useAppSelector((state) => state.orgUsers.isMutating);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <ConfirmShell
+      title={`Reset ${member.fullName}'s multi-factor sign-in?`}
+      description={
+        <>
+          <p>This removes their authenticator app and recovery codes, and <strong className="text-foreground">signs them out on every device</strong> right away.</p>
+          <p>They sign in again with their password. If your organization requires MFA, they set it up again then.</p>
+        </>
+      }
+      error={error}
+      confirmLabel="Reset MFA"
+      pendingLabel="Resetting..."
+      destructive
+      isPending={isPending}
+      onClose={onClose}
+      onConfirm={() =>
+        dispatch(
+          reqToResetOrgUserMfa({
+            data: { id: member.id },
+            onSuccess: () => {
+              notify(`${member.fullName}'s MFA was reset and they were signed out everywhere.`, { type: "success" });
+              onDone();
+              onClose();
+            },
+            onFailure: (failure: unknown) => {
+              const apiError = handleFailure(failure, "Couldn't reset this member's MFA. Try again.");
+              if (!apiError) {
+                onClose();
+                return;
+              }
+              setError((apiError.code && API_ERROR_MESSAGES[apiError.code]) || apiError.message);
+            },
+          }),
+        )
+      }
+    />
+  );
+}
+
 const LEAVE_UNASSIGNED = "unassigned";
 
 export function RemoveMemberDialog({ member, orgName, onClose, onDone }: DialogProps) {
@@ -438,6 +486,8 @@ export function MemberActionDialog({
       return <ReactivateDialog {...props} />;
     case "revoke_sessions":
       return <RevokeSessionsDialog {...props} />;
+    case "reset_mfa":
+      return <ResetMfaDialog {...props} />;
     case "remove":
       return <RemoveMemberDialog {...props} />;
     case "transfer_ownership":
