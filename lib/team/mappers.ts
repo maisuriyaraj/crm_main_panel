@@ -17,6 +17,10 @@ import type {
   TeamRoleDetail,
   TeamRoleRef,
   TeamSummary,
+  TeamRef,
+  OrgTeam,
+  RoleScopes,
+  TeamInput,
 } from "@/lib/team/types";
 
 const toId = (value: unknown): string => String(value);
@@ -34,6 +38,57 @@ const mapRoleRef = (raw: any): TeamRoleRef | null =>
     ? { id: toId(raw.id), name: raw.name, label: raw.label ?? roleDisplayName(raw.name), isAdmin: raw.is_admin === true }
     : null;
 
+// What the Teams API sends, before mapping.
+type ApiId = number | string;
+interface ApiTeamRef { id: ApiId; name: string }
+export interface ApiTeam {
+  id: ApiId;
+  name: string;
+  description?: string | null;
+  lead?: { id: ApiId; full_name: string } | null;
+  member_count?: number;
+  members?: Array<{ id: ApiId; full_name: string; email: string; status: string }>;
+  created_at?: string;
+  updated_at?: string;
+  allowed_actions?: OrgTeam["allowedActions"];
+}
+
+const mapTeamRef = (raw: ApiTeamRef | null | undefined): TeamRef | null => (raw ? { id: toId(raw.id), name: raw.name } : null);
+
+const isScope = (value: unknown): value is "own" | "team" | "all" => value === "own" || value === "team" || value === "all";
+export const mapScopesFromApi = (raw: Record<string, unknown> | null | undefined): RoleScopes => {
+  const out: RoleScopes = {};
+  (["leads", "contacts"] as const).forEach((module) => {
+    const value = raw ? raw[module] : undefined;
+    if (isScope(value)) out[module] = value;
+  });
+  return out;
+};
+
+export const mapTeamFromApi = (raw: ApiTeam): OrgTeam => ({
+  id: toId(raw.id),
+  name: raw.name,
+  description: optional(raw.description),
+  lead: raw.lead ? { id: toId(raw.lead.id), fullName: raw.lead.full_name } : null,
+  memberCount: Number(raw.member_count ?? 0),
+  members: (Array.isArray(raw.members) ? raw.members : []).map((member) => ({
+    id: toId(member.id),
+    fullName: member.full_name,
+    email: member.email,
+    status: mapMemberStatus(member.status === "suspended" ? "disabled" : member.status),
+  })),
+  createdAt: optional(raw.created_at),
+  updatedAt: optional(raw.updated_at),
+  allowedActions: Array.isArray(raw.allowed_actions) ? raw.allowed_actions : [],
+});
+
+// Body for POST/PATCH /app/teams; only the fields given are sent.
+export const teamInputToApi = (input: TeamInput) => ({
+  ...(input.name !== undefined ? { name: input.name } : {}),
+  ...(input.description !== undefined ? { description: input.description } : {}),
+  ...(input.leadUserId !== undefined ? { lead_user_id: input.leadUserId } : {}),
+});
+
 export const mapMemberFromApi = (raw: any): TeamMember => ({
   id: toId(raw.id),
   fullName: raw.full_name,
@@ -41,6 +96,7 @@ export const mapMemberFromApi = (raw: any): TeamMember => ({
   mobile: optional(raw.mobile),
   status: mapMemberStatus(raw.status),
   role: mapRoleRef(raw.role),
+  team: mapTeamRef(raw.team),
   createdAt: raw.created_at,
   lastLoginAt: optional(raw.last_login_at),
   isSelf: raw.is_self === true,
@@ -84,6 +140,7 @@ export const mapRoleFromApi = (raw: any): TeamRole => ({
   version: Number(raw.version ?? 1),
   updatedAt: optional(raw.updated_at),
   permissions: Array.isArray(raw.permissions) ? raw.permissions : undefined,
+  scopes: raw.scopes ? mapScopesFromApi(raw.scopes) : undefined,
 });
 
 const mapPerson = (raw: any) => (raw ? { id: toId(raw.id), fullName: raw.full_name } : undefined);
@@ -115,6 +172,7 @@ export const roleInputToApi = (input: RoleInput) => ({
   name: input.name,
   description: input.description,
   permissions: input.permissions,
+  ...(input.scopes && Object.keys(input.scopes).length ? { scopes: input.scopes } : {}),
 });
 
 export const mapInvitationFromApi = (raw: any): TeamInvitation => ({
@@ -122,6 +180,7 @@ export const mapInvitationFromApi = (raw: any): TeamInvitation => ({
   email: raw.email,
   fullName: optional(raw.full_name),
   role: mapRoleRef(raw.role),
+  team: mapTeamRef(raw.team),
   status: raw.status,
   invitedBy: raw.invited_by ? { id: toId(raw.invited_by.id), fullName: raw.invited_by.full_name } : undefined,
   expiresAt: raw.expires_at ?? null,
@@ -149,9 +208,16 @@ export const mapAuditEventFromApi = (raw: any): TeamAuditEvent => ({
   createdAt: raw.created_at,
 });
 
+// An option without `assignable` (an older API) counts as assignable; the API
+// refuses an assignee outside the caller's reach either way.
 export const mapMemberOptionFromApi = (raw: any): MemberOption => ({
   id: toId(raw.id),
   fullName: raw.full_name,
+  teamId: raw.team_id === null || raw.team_id === undefined ? null : toId(raw.team_id),
+  assignable: {
+    leads: raw.assignable?.leads !== false,
+    contacts: raw.assignable?.contacts !== false,
+  },
 });
 
 export const mapInvitationPreviewFromApi = (raw: any): InvitationPreview => ({

@@ -38,7 +38,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 type SortKey = NonNullable<MemberListQuery["sort"]>;
 
 const ROW_ACTIONS: Array<{ action: MemberAction & MemberDialogType; label: string }> = [
-  { action: "change_role", label: "Change role" },
+  { action: "change_role", label: "Change role or team" },
   { action: "suspend", label: "Suspend" },
   { action: "reactivate", label: "Reactivate" },
   { action: "revoke_sessions", label: "Sign out everywhere" },
@@ -68,6 +68,7 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
   const handleFailure = useTeamFailure();
   const { users, pagination, isLoading, error } = useAppSelector((state) => state.orgUsers);
   const roles = useAppSelector((state) => state.teamRoles.roles);
+  const teams = useAppSelector((state) => state.teams.teams);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -75,21 +76,24 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
   // The parent remounts this tab when `roleFilter` changes, so it only seeds
   // the initial value.
   const [roleFilter, setRoleFilter] = useState(requestedRole ?? ALL);
+  // A team id, "none" for members in no team, or all.
+  const [teamFilter, setTeamFilter] = useState(ALL);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ key: SortKey; dir: SortDirection }>({ key: "created_at", dir: "desc" });
 
   const [detailMember, setDetailMember] = useState<TeamMember | null>(null);
   const [dialog, setDialog] = useState<{ type: MemberDialogType; member: TeamMember } | null>(null);
 
-  const hasActiveFilters = search.trim() !== "" || statusFilter !== ALL || roleFilter !== ALL;
+  const hasActiveFilters = search.trim() !== "" || statusFilter !== ALL || roleFilter !== ALL || teamFilter !== ALL;
 
   const query = useMemo<MemberListQuery>(() => {
     const next: MemberListQuery = { page, limit: PAGE_SIZE, sort: sort.key, order: sort.dir };
     if (search.trim()) next.search = search.trim();
     if (statusFilter !== ALL) next.status = statusFilter as MemberListQuery["status"];
     if (roleFilter !== ALL) next.role_id = roleFilter;
+    if (teamFilter !== ALL) next.team_id = teamFilter;
     return next;
-  }, [page, search, statusFilter, roleFilter, sort]);
+  }, [page, search, statusFilter, roleFilter, teamFilter, sort]);
 
   const load = useCallback(() => {
     dispatch(
@@ -117,6 +121,7 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
     setSearch("");
     setStatusFilter(ALL);
     setRoleFilter(ALL);
+    setTeamFilter(ALL);
     setPage(1);
   };
 
@@ -163,6 +168,12 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
       header: "Role",
       sortable: true,
       render: (row) => <Badge variant="secondary">{row.role?.label ?? "—"}</Badge>,
+    },
+    {
+      key: "team",
+      header: "Team",
+      className: "hidden md:table-cell",
+      render: (row) => (row.team ? row.team.name : <span className="text-muted-foreground">—</span>),
     },
     {
       key: "status",
@@ -272,6 +283,29 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
             ))}
           </SelectContent>
         </Select>
+
+        {teams.length > 0 && (
+          <Select
+            value={teamFilter}
+            onValueChange={(value) => {
+              setTeamFilter(value);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="w-[150px]" aria-label="Filter by team">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>All teams</SelectItem>
+              <SelectItem value="none">No team</SelectItem>
+              {teams.map((team) => (
+                <SelectItem key={team.id} value={team.id}>
+                  {team.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {error && !isLoading ? (

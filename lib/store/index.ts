@@ -8,6 +8,7 @@ import contactsReducer from "./slices/contactsSlice";
 import teamInvitationsReducer from "./slices/teamInvitationsSlice";
 import teamRolesReducer from "./slices/teamRolesSlice";
 import teamAuditReducer from "./slices/teamAuditSlice";
+import teamsReducer from "./slices/teamsSlice";
 import permissionCatalogReducer from "./slices/permissionCatalogSlice";
 import leadAttachmentsReducer from "./slices/leadAttachmentsSlice";
 import featuresReducer from "./slices/featuresSlice";
@@ -29,6 +30,7 @@ const appReducer = combineReducers({
   teamInvitations: teamInvitationsReducer,
   teamRoles: teamRolesReducer,
   teamAudit: teamAuditReducer,
+  teams: teamsReducer,
   permissionCatalog: permissionCatalogReducer,
   leadAttachments: leadAttachmentsReducer,
   features: featuresReducer,

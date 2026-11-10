@@ -99,6 +99,7 @@ export const reqToUpdateTeamRole = createAsyncThunk<
             if (fields.name !== undefined) body.name = fields.name;
             if (fields.description !== undefined) body.description = fields.description;
             if (fields.permissions !== undefined) body.permissions = fields.permissions;
+            if (fields.scopes !== undefined && Object.keys(fields.scopes).length) body.scopes = fields.scopes;
 
             const response = await Axios.patch(roleUrl(id), body);
             const role = mapRoleDetailFromApi(response.data?.data);

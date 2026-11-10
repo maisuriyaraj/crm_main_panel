@@ -8,6 +8,7 @@ import { Plus } from "lucide-react";
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToGetTeamRoles } from "@/lib/store/slices/teamRolesSlice";
+import { reqToGetTeams } from "@/lib/store/slices/teamsSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsage } from "@/hooks/useUsage";
 import { FALLBACK_UPGRADE_MESSAGE } from "@/lib/usage/mappers";
@@ -20,9 +21,10 @@ import { InvitationsTab } from "@/components/team/invitations-tab";
 import { ActivityTab } from "@/components/team/activity-tab";
 import { InviteMemberDialog } from "@/components/team/invite-member-dialog";
 import { RolesTab } from "@/components/team/roles-tab";
+import { TeamsTab } from "@/components/team/teams-tab";
 import { MfaPolicyCard } from "@/components/team/mfa-policy-card";
 
-type TeamTab = "members" | "invitations" | "roles" | "activity";
+type TeamTab = "members" | "teams" | "invitations" | "roles" | "activity";
 
 export default function TeamSettingsPage() {
   return (
@@ -52,7 +54,7 @@ function TeamSettings() {
 
   const requestedTab = searchParams.get("tab");
   const tab: TeamTab =
-    requestedTab === "invitations" || requestedTab === "roles" || (requestedTab === "activity" && canViewAudit)
+    requestedTab === "invitations" || requestedTab === "roles" || requestedTab === "teams" || (requestedTab === "activity" && canViewAudit)
       ? requestedTab
       : "members";
   // Set by "View members" on a role, so the Members tab opens filtered to it.
@@ -75,6 +77,13 @@ function TeamSettings() {
     if (canView) dispatch(reqToGetTeamRoles({ data: null }));
   }, [dispatch, canView]);
   useEffect(loadRoles, [loadRoles, version]);
+
+  // Teams feed the Teams tab, the Members filter and column, and the invite and
+  // change-team pickers; member moves change their counts, so they reload too.
+  const loadTeams = useCallback(() => {
+    if (canView) dispatch(reqToGetTeams({}));
+  }, [dispatch, canView]);
+  useEffect(loadTeams, [loadTeams, version]);
 
   // The tab lives in the query string so links and reloads keep it.
   const setTab = (next: string) => {
@@ -170,6 +179,7 @@ function TeamSettings() {
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="max-w-full overflow-x-auto">
           <TabsTrigger value="members">Members{memberCount !== null ? ` (${memberCount})` : ""}</TabsTrigger>
+          <TabsTrigger value="teams">Teams</TabsTrigger>
           <TabsTrigger value="invitations">
             Invitations{summary ? ` (${summary.pendingInvitations})` : ""}
           </TabsTrigger>
@@ -189,6 +199,9 @@ function TeamSettings() {
             onInvite={() => setInviteOpen(true)}
             onChanged={refresh}
           />
+        </TabsContent>
+        <TabsContent value="teams" className="mt-4">
+          <TeamsTab canManage={can("team.manage") && !orgInactive} onChanged={refresh} onRetry={loadTeams} />
         </TabsContent>
         <TabsContent value="invitations" className="mt-4">
           <InvitationsTab version={version} canInvite={canInvite} onInvite={() => setInviteOpen(true)} onChanged={refresh} />

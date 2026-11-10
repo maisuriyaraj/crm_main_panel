@@ -13,6 +13,8 @@ export function useAuth() {
     const permissions = user?.permissions ?? [];
     const can = (permission: string) => permissions.includes(permission);
     const canAll = (keys: string[]) => keys.every(can);
+    // Why a whole module is unavailable to everyone, or null when it is on.
+    const moduleOff = (module: string) => user?.disabledModules?.find((entry) => entry.module === module) ?? null;
 
     return {
         user,
@@ -20,6 +22,7 @@ export function useAuth() {
         role: user?.role ?? null,
         can,
         canAll,
+        moduleOff,
         isAuthenticated: !!user,
         isAuthChecked,
         isLoading,

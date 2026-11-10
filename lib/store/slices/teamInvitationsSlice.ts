@@ -62,8 +62,8 @@ const deliveryMutation = (type: string, request: (data: any) => Promise<any>, fa
 
 export const reqToCreateInvitation = deliveryMutation(
     "teamInvitations/reqToCreateInvitation",
-    ({ email, fullName, roleId }) =>
-        Axios.post(apiRoutes.invitations, { email, full_name: fullName || undefined, role_id: roleId }),
+    ({ email, fullName, roleId, teamId }) =>
+        Axios.post(apiRoutes.invitations, { email, full_name: fullName || undefined, role_id: roleId, team_id: teamId || undefined }),
     "Failed to send invitation",
 );
 

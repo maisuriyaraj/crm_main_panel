@@ -6,7 +6,10 @@ import { z } from "zod";
 
 export const MAX_CUSTOM_ROLES = 20;
 
-const RESERVED_ROLE_NAMES = new Set(["owner", "super admin", "admin", "manager", "employee"]);
+const RESERVED_ROLE_NAMES = new Set([
+  "owner", "super admin", "admin", "manager", "employee",
+  "sales manager", "sales executive", "marketing manager", "accountant", "viewer",
+]);
 
 // Same normalization the API applies: trim and collapse inner whitespace.
 export const normalizeRoleName = (value: string) => value.trim().replace(/\s+/g, " ");

@@ -3,6 +3,14 @@ import { clearClientSession, isSessionEnded } from "@/lib/auth/session";
 import { createAction, createAsyncThunk, createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { apiRoutes } from "@/lib/constants";
 
+// A catalog module (e.g. "leads") that is off for the whole organization: its
+// flag is off for the plan, or the subscription has ended.
+export interface DisabledModule {
+    module: string;
+    reason: "feature_disabled" | "subscription_inactive";
+    features: string[];
+}
+
 export interface AuthUser {
     id: number;
     email: string;
@@ -11,7 +19,14 @@ export interface AuthUser {
     roleRank?: number;
     // For rendering only; the API re-checks every action.
     isAdmin?: boolean;
+    // The effective set: a module switched off for the organization is already
+    // missing from it, and listed in disabledModules with the reason.
     permissions?: string[];
+    disabledModules?: DisabledModule[];
+    // Which records the member sees per record-scoped module, after their team
+    // is applied (team with no team is own). Missing means no access to the module.
+    scopes?: Partial<Record<"leads" | "contacts", "own" | "team" | "all">>;
+    teamId?: number | string | null;
     organizationId: number;
     organizationName?: string | null;
     organizationStatus?: string | null;

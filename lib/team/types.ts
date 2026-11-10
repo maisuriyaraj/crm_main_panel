@@ -9,12 +9,42 @@ export type MemberStatus = "active" | "suspended" | "invited";
 export type MemberAction =
   | "edit_profile"
   | "change_role"
+  | "change_team"
   | "suspend"
   | "reactivate"
   | "revoke_sessions"
   | "remove"
   | "transfer_ownership"
   | "resend_invite";
+
+// The one team a member is in (SRS SH-S2).
+export interface TeamRef {
+  id: string;
+  name: string;
+}
+
+// Which records a role sees in a record-scoped module: its own, its team's, or all.
+export type RecordScope = "own" | "team" | "all";
+export type ScopedModule = "leads" | "contacts";
+export type RoleScopes = Partial<Record<ScopedModule, RecordScope>>;
+
+export interface OrgTeam {
+  id: string;
+  name: string;
+  description?: string;
+  lead: { id: string; fullName: string } | null;
+  memberCount: number;
+  members: Array<{ id: string; fullName: string; email: string; status: MemberStatus }>;
+  createdAt?: string;
+  updatedAt?: string;
+  allowedActions: Array<"rename" | "set_lead" | "delete">;
+}
+
+export interface TeamInput {
+  name?: string;
+  description?: string | null;
+  leadUserId?: string | null;
+}
 
 export interface TeamRoleRef {
   id: string;
@@ -30,6 +60,7 @@ export interface TeamMember {
   mobile?: string;
   status: MemberStatus;
   role: TeamRoleRef | null;
+  team: TeamRef | null;
   createdAt: string;
   lastLoginAt?: string;
   isSelf: boolean;
@@ -72,6 +103,7 @@ export interface TeamRole {
   version: number;
   updatedAt?: string;
   permissions?: string[];
+  scopes?: RoleScopes;
 }
 
 export interface TeamRoleDetail extends TeamRole {
@@ -102,6 +134,7 @@ export interface RoleInput {
   name: string;
   description: string | null;
   permissions: string[];
+  scopes?: RoleScopes;
 }
 
 export type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
@@ -112,6 +145,7 @@ export interface TeamInvitation {
   email: string;
   fullName?: string;
   role: TeamRoleRef | null;
+  team: TeamRef | null;
   status: InvitationStatus;
   invitedBy?: { id: string; fullName: string };
   expiresAt: string | null;
@@ -144,6 +178,10 @@ export interface TeamAuditEvent {
 export interface MemberOption {
   id: string;
   fullName: string;
+  teamId: string | null;
+  // Whether the signed-in member may make this person a record's assignee in
+  // each record-scoped module (own scope: only themself; team: their team).
+  assignable: Record<ScopedModule, boolean>;
 }
 
 export interface TeamPagination {
@@ -169,6 +207,8 @@ export interface MemberListQuery {
   search?: string;
   status?: "active" | "suspended";
   role_id?: string;
+  // A team id, or "none" for members in no team.
+  team_id?: string;
   sort?: "full_name" | "created_at" | "last_login_at" | "role" | "status";
   order?: "asc" | "desc";
 }

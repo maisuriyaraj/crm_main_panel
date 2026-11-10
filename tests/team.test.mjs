@@ -151,10 +151,18 @@ test("remove sends the optional reassignment in the DELETE body", async () => {
 });
 
 test("member options (names only) feed the Leads/Contacts owner dropdowns", async () => {
-    routes["GET /api/app/members/options"] = () => [200, { status: true, data: [{ id: 3, full_name: "Raj" }] }];
+    // Options also say each person's team and whether the caller may assign to them
+    // (record scope); an option without `assignable` counts as assignable.
+    routes["GET /api/app/members/options"] = () => [200, { status: true, data: [
+        { id: 3, full_name: "Raj" },
+        { id: 4, full_name: "Asha", team_id: 9, assignable: { leads: false, contacts: true } },
+    ] }];
 
     await store.dispatch(users.reqToGetMemberOptions({ data: null }));
-    assert.deepEqual(store.getState().orgUsers.memberOptions, [{ id: "3", fullName: "Raj" }]);
+    assert.deepEqual(store.getState().orgUsers.memberOptions, [
+        { id: "3", fullName: "Raj", teamId: null, assignable: { leads: true, contacts: true } },
+        { id: "4", fullName: "Asha", teamId: "9", assignable: { leads: false, contacts: true } },
+    ]);
 });
 
 test("create invitation posts snake_case and hands the one-time link to onSuccess", async () => {

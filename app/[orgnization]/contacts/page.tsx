@@ -50,6 +50,8 @@ import {
 } from "@/components/contacts/contact-form-dialog";
 import { ContactDetailSheet } from "@/components/contacts/contact-detail-sheet";
 import { NoAccess } from "@/components/auth/no-access";
+import { ExportButton } from "@/components/shared/export-button";
+import { apiRoutes } from "@/lib/constants";
 
 const PAGE_SIZE = 20;
 const ALL = "all";
@@ -61,7 +63,7 @@ const SEARCH_DEBOUNCE_MS = 350;
 export default function ContactsPage() {
   const { user, can } = useAuth();
   if (!user) return null;
-  if (!can("contacts.view")) return <NoAccess title="Contacts" area="Contacts" />;
+  if (!can("contacts.view")) return <NoAccess title="Contacts" area="Contacts" module="contacts" />;
   return <ContactsWorkspace />;
 }
 
@@ -73,6 +75,7 @@ function ContactsWorkspace() {
   const canUpdate = can("contacts.update");
   const canBulk = can("contacts.bulk");
   const canDelete = can("contacts.delete");
+  const canExport = can("contacts.export");
   const canManageNotes = can("contacts.notes.manage");
   const canLookupMembers = can("members.lookup");
   // Name + Company + Email + Mobile + Owner + Tags, plus the gated columns.
@@ -84,6 +87,9 @@ function ContactsWorkspace() {
   );
   // Active teammates (names only), readable by every role.
   const owners = useAppSelector((state) => state.orgUsers.memberOptions);
+  // Pickers offer only people the member may assign contacts to (own scope:
+  // themself; team scope: their team); names still resolve from the full list.
+  const assignableOwners = owners.filter((owner) => owner.assignable?.contacts !== false);
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -282,12 +288,21 @@ function ContactsWorkspace() {
             {pagination ? `${pagination.total} total` : " "}
           </p>
         </div>
-        {canCreate && (
-          <Button onClick={openCreate}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Contact
-          </Button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {canExport && (
+            <ExportButton
+              path={apiRoutes.contactsExport}
+              params={{ search: search.trim() || undefined, assigned_to: ownerFilter !== ALL ? ownerFilter : undefined }}
+              fileName="contacts.csv"
+            />
+          )}
+          {canCreate && (
+            <Button onClick={openCreate}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Contact
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -337,7 +352,7 @@ function ContactsWorkspace() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>Unassigned</SelectItem>
-              {owners.map((owner) => (
+              {assignableOwners.map((owner) => (
                 <SelectItem key={owner.id} value={owner.id}>
                   {owner.fullName}
                 </SelectItem>
@@ -493,7 +508,11 @@ function ContactsWorkspace() {
       <ContactFormDialog
         mode={formMode}
         initialContact={editContact ?? undefined}
-        owners={owners}
+        owners={
+          editContact?.assignedTo && !assignableOwners.some((owner) => owner.id === editContact.assignedTo)
+            ? [...assignableOwners, ...owners.filter((owner) => owner.id === editContact.assignedTo)]
+            : assignableOwners
+        }
         open={formOpen}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}

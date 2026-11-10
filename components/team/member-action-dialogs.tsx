@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RoleSelectItems } from "@/components/team/role-select-items";
+import { NO_TEAM, TeamSelectItems } from "@/components/team/team-select-items";
 
 export type MemberDialogType =
   | "change_role"
@@ -147,11 +148,18 @@ function useMemberAction(onClose: () => void, onDone: () => void) {
   return { isPending, error, setError, callbacks };
 }
 
+// Role and team in one place: both decide what a member can see (a team-scope
+// role sees the leads of everyone in the member's team). Only what changed is sent.
 export function ChangeRoleDialog({ member, onClose, onDone }: DialogProps) {
   const dispatch = useAppDispatch();
   const roles = useAppSelector((state) => state.teamRoles.roles);
+  const teams = useAppSelector((state) => state.teams.teams);
   const { isPending, error, callbacks } = useMemberAction(onClose, onDone);
   const [roleId, setRoleId] = useState(member.role?.id ?? "");
+  const currentTeamId = member.team?.id ?? NO_TEAM;
+  const [teamId, setTeamId] = useState(currentTeamId);
+  const roleChanged = !!roleId && roleId !== member.role?.id;
+  const teamChanged = teamId !== currentTeamId;
 
   const current = roles.find((role) => role.id === member.role?.id);
   const next = roles.find((role) => role.id === roleId);
@@ -162,19 +170,28 @@ export function ChangeRoleDialog({ member, onClose, onDone }: DialogProps) {
 
   return (
     <ConfirmShell
-      title={`Change ${member.fullName}'s role`}
-      description={<p>Current role: {member.role?.label ?? "—"}. The change applies within a few minutes on their devices.</p>}
+      title={`Change ${member.fullName}'s role or team`}
+      description={
+        <p>
+          Current role: {member.role?.label ?? "—"}. Team: {member.team?.name ?? "none"}. The change applies within a few minutes on
+          their devices.
+        </p>
+      }
       error={error}
-      confirmLabel="Save role"
+      confirmLabel="Save"
       pendingLabel="Saving..."
-      disabled={!roleId || roleId === member.role?.id}
+      disabled={!roleChanged && !teamChanged}
       isPending={isPending}
       onClose={onClose}
       onConfirm={() =>
         dispatch(
           reqToUpdateOrgUser({
-            data: { id: member.id, role_id: roleId },
-            ...callbacks("Role updated.", "Couldn't update the role. Try again."),
+            data: {
+              id: member.id,
+              ...(roleChanged ? { role_id: roleId } : {}),
+              ...(teamChanged ? { team_id: teamId === NO_TEAM ? null : teamId } : {}),
+            },
+            ...callbacks(teamChanged && !roleChanged ? "Team updated." : "Role updated.", "Couldn't save the change. Try again."),
           }),
         )
       }
@@ -196,6 +213,20 @@ export function ChangeRoleDialog({ member, onClose, onDone }: DialogProps) {
           </p>
         )}
       </div>
+      {(teams.length > 0 || member.team) && (
+        <div className="space-y-2">
+          <Label htmlFor="member-team">Team</Label>
+          <Select value={teamId} onValueChange={setTeamId}>
+            <SelectTrigger id="member-team">
+              <SelectValue placeholder="No team" />
+            </SelectTrigger>
+            <SelectContent>
+              <TeamSelectItems teams={teams} />
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">One team per member. Leaving a team also ends leading it.</p>
+        </div>
+      )}
     </ConfirmShell>
   );
 }

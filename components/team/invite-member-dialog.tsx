@@ -40,17 +40,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { RoleSelectItems } from "@/components/team/role-select-items";
+import { NO_TEAM, TeamSelectItems } from "@/components/team/team-select-items";
 import { InviteLinkView } from "@/components/team/invite-link-view";
 
 const inviteSchema = z.object({
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email").max(255),
   fullName: z.string().trim().max(255).optional(),
   roleId: z.string().min(1, "Choose a role"),
+  // "none", or a team id.
+  teamId: z.string(),
 });
 
 type InviteValues = z.infer<typeof inviteSchema>;
 
-const API_FIELDS: Record<string, string> = { email: "email", full_name: "fullName", role_id: "roleId" };
+const API_FIELDS: Record<string, string> = { email: "email", full_name: "fullName", role_id: "roleId", team_id: "teamId" };
 
 interface InviteMemberDialogProps {
   open: boolean;
@@ -64,6 +67,7 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
   const dispatch = useAppDispatch();
   const handleFailure = useTeamFailure();
   const roles = useAppSelector((state) => state.teamRoles.roles);
+  const teams = useAppSelector((state) => state.teams.teams);
   const isSubmitting = useAppSelector((state) => state.teamInvitations.isMutating);
   const assignable = roles.filter((role) => role.assignable);
   // Only OrbitOps can change a plan today; the API words this for the caller's role.
@@ -74,14 +78,14 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
 
   const form = useForm<InviteValues>({
     resolver: zodResolver(inviteSchema),
-    defaultValues: { email: "", fullName: "", roleId: "" },
+    defaultValues: { email: "", fullName: "", roleId: "", teamId: NO_TEAM },
   });
 
   // Default to the lowest-ranked assignable role, so a quick invite never
   // grants more than intended.
   const defaultRoleId = [...assignable].sort((a, b) => a.rank - b.rank)[0]?.id ?? "";
   useEffect(() => {
-    if (open) form.reset({ email: "", fullName: "", roleId: defaultRoleId });
+    if (open) form.reset({ email: "", fullName: "", roleId: defaultRoleId, teamId: NO_TEAM });
   }, [open, defaultRoleId, form]);
 
   // Cleared on close so the next open starts fresh.
@@ -107,7 +111,7 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
     setBanner(null);
     dispatch(
       reqToCreateInvitation({
-        data: { email: values.email, fullName: values.fullName, roleId: values.roleId },
+        data: { email: values.email, fullName: values.fullName, roleId: values.roleId, teamId: values.teamId === NO_TEAM ? undefined : values.teamId },
         onSuccess: finish,
         onFailure: (error: unknown) => {
           const apiError = handleFailure(error, "Couldn't create the invitation. Try again.");
@@ -238,6 +242,30 @@ export function InviteMemberDialog({ open, onOpenChange, seatsFull, seatsLimit, 
                   </FormItem>
                 )}
               />
+
+              {teams.length > 0 && (
+                <FormField
+                  control={form.control}
+                  name="teamId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Team (optional)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="No team" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <TeamSelectItems teams={teams} />
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>They join this team when they accept. Team members can see each other&apos;s leads if their role allows.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>

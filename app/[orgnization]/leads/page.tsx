@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 
@@ -58,6 +58,9 @@ import { KanbanBoard } from "@/components/leads/kanban-board";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadAnalytics } from "@/components/leads/lead-analytics";
 import { NoAccess } from "@/components/auth/no-access";
+import { apiErrorMessage } from "@/lib/auth/errors";
+import { ExportButton } from "@/components/shared/export-button";
+import { apiRoutes } from "@/lib/constants";
 import { HeldLeadsNotice } from "@/components/usage/held-leads-notice";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUsage } from "@/hooks/useUsage";
@@ -73,16 +76,35 @@ const PRIORITY_VARIANT: Record<Lead["priority"], "default" | "secondary" | "outl
   urgent: "destructive",
 };
 
-// Fetches once with a generous page size and relies on client-side
-// filter/search/sort (matches the DataTable's existing client-side mode).
-// Revisit with real server-driven pagination if a single org's lead count
-// starts approaching this.
-const LEADS_FETCH_LIMIT = 1000;
+// The API filters, sorts and pages, and only ever returns leads inside the
+// member's record scope. The list asks for one page; the board and analytics
+// need every stage at once, so they ask for up to the API's maximum.
+const LIST_PAGE_SIZE = 25;
+const BOARD_FETCH_LIMIT = 1000;
+const SEARCH_DEBOUNCE_MS = 350;
+
+// List columns the API can sort by, and its field names.
+const SORT_FIELDS: Record<string, string> = {
+  fullName: "full_name",
+  priority: "priority",
+  temperature: "temperature",
+  leadScore: "lead_score",
+  value: "value",
+};
+
+// "Self / My team / All": the widest choice the member's scope allows comes first.
+type OwnershipFilter = "self" | "team" | "all";
+const OWNERSHIP_LABELS: Record<OwnershipFilter, string> = { self: "My leads", team: "My team's leads", all: "All leads" };
+const ownershipChoices = (scope: "own" | "team" | "all" | undefined, hasTeam: boolean): OwnershipFilter[] => {
+  if (scope === "all") return hasTeam ? ["all", "team", "self"] : ["all", "self"];
+  if (scope === "team" && hasTeam) return ["team", "self"];
+  return ["self"];
+};
 
 export default function LeadsPage() {
   const { user, can } = useAuth();
   if (!user) return null;
-  if (!can("leads.view")) return <NoAccess title="Leads" area="Leads" />;
+  if (!can("leads.view")) return <NoAccess title="Leads" area="Leads" module="leads" />;
   return <LeadsWorkspace />;
 }
 
@@ -99,6 +121,7 @@ function LeadsWorkspace() {
   const canUpdate = can("leads.update");
   const canDelete = can("leads.delete");
   const canBulk = can("leads.bulk");
+  const canExport = can("leads.export");
   const canConvert = canAll(["leads.update", "contacts.create"]);
   const canLookupMembers = can("members.lookup");
   // At the plan's lead limit the API refuses every new lead, so say so up front.
@@ -119,7 +142,13 @@ function LeadsWorkspace() {
   // data takes over automatically once it exists.
   const statuses = apiStatuses.length > 0 ? apiStatuses : FALLBACK_LEAD_STATUSES;
 
+  const { user } = useAuth();
+  const ownership = ownershipChoices(user?.scopes?.leads, !!user?.teamId);
+  const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilter>(ownership[0]);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "", dir: "desc" });
   const [stageFilter, setStageFilter] = useState("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -137,12 +166,49 @@ function LeadsWorkspace() {
     router.replace(`${pathname}?${params.toString()}`);
   };
 
-  const refreshLeads = () => {
-    dispatch(reqToGetLeads({ data: { limit: LEADS_FETCH_LIMIT } }));
-  };
+  // The same filters go to the list, the board and the export. Placeholder stages
+  // (an org with no pipeline yet) have no real id, so they are left out.
+  const filterParams = useMemo(() => ({
+    search: search.trim() || undefined,
+    status_id: stageFilter !== "all" && /^\d+$/.test(stageFilter) ? stageFilter : undefined,
+    assigned_to: ownerFilter !== "all" ? ownerFilter : undefined,
+    priority: priorityFilter !== "all" ? priorityFilter : undefined,
+    temperature: temperatureFilter !== "all" ? temperatureFilter : undefined,
+    owner: ownershipFilter,
+    sort_by: sort.key && SORT_FIELDS[sort.key] ? SORT_FIELDS[sort.key] : undefined,
+    sort_dir: sort.key ? sort.dir.toUpperCase() : undefined,
+  }), [search, stageFilter, ownerFilter, priorityFilter, temperatureFilter, ownershipFilter, sort]);
+
+  const query = useMemo(
+    () => (view === "list" ? { ...filterParams, page, limit: LIST_PAGE_SIZE } : { ...filterParams, page: 1, limit: BOARD_FETCH_LIMIT }),
+    [filterParams, view, page],
+  );
+
+  const refreshLeads = useCallback(() => {
+    dispatch(reqToGetLeads({ data: query }));
+  }, [dispatch, query]);
 
   useEffect(() => {
     refreshLeads();
+  }, [refreshLeads]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // Any filter change starts again at page 1, and drops a selection that may
+  // no longer be on screen.
+  const changeFilter = <T,>(setter: (value: T) => void) => (value: T) => {
+    setter(value);
+    setPage(1);
+    setSelectedIds(new Set());
+  };
+
+  useEffect(() => {
     dispatch(reqToGetLeadStatuses({ data: null }));
     if (canLookupMembers) dispatch(reqToGetMemberOptions({ data: null }));
     if (!featuresLoaded) dispatch(reqToGetFeatures({}));
@@ -155,20 +221,20 @@ function LeadsWorkspace() {
     dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
   }, [detailLeadId, dispatch]);
 
-  const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      if (stageFilter !== "all" && lead.statusId !== stageFilter) return false;
-      if (ownerFilter !== "all" && lead.assignedTo !== ownerFilter) return false;
-      if (priorityFilter !== "all" && lead.priority !== priorityFilter) return false;
-      if (temperatureFilter !== "all" && lead.temperature !== temperatureFilter) return false;
-      if (search.trim()) {
-        const term = search.trim().toLowerCase();
-        const haystack = `${lead.fullName} ${lead.companyName ?? ""} ${lead.email ?? ""}`.toLowerCase();
-        if (!haystack.includes(term)) return false;
-      }
-      return true;
-    });
-  }, [leads, stageFilter, ownerFilter, priorityFilter, temperatureFilter, search]);
+  // The server already filtered and scoped these.
+  const filteredLeads = leads;
+  const exportParams = filterParams;
+  const total = useAppSelector((state) => state.leads.pagination?.total ?? leads.length);
+
+  // Pickers offer only people the member may assign to (own scope: themself;
+  // team scope: their team). Editing keeps the lead's current owner listed so
+  // the form shows it; the API checks only a change.
+  const assignableOwners = owners.filter((owner) => owner.assignable?.leads !== false);
+  const formOwners =
+    editLead?.assignedTo && !assignableOwners.some((owner) => owner.id === editLead.assignedTo)
+      ? [...assignableOwners, ...owners.filter((owner) => owner.id === editLead.assignedTo)]
+      : assignableOwners;
+  const failed = (fallback: string) => (error: unknown) => notify(apiErrorMessage(error, fallback), { type: "error" });
 
   const openCreate = () => {
     setFormMode("create");
@@ -202,7 +268,7 @@ function LeadsWorkspace() {
               refreshUsage();
               return;
             }
-            notify("Couldn't create lead. Please try again.", { type: "error" });
+            notify(apiErrorMessage(error, "Couldn't create lead. Please try again."), { type: "error" });
           },
         }),
       );
@@ -222,7 +288,7 @@ function LeadsWorkspace() {
             notify("Lead updated.", { type: "success" });
             refreshLeads();
           },
-          onFailure: () => notify("Couldn't update lead. Please try again.", { type: "error" }),
+          onFailure: failed("Couldn't update lead. Please try again."),
         }),
       );
     };
@@ -234,7 +300,7 @@ function LeadsWorkspace() {
         reqToChangeLeadStage({
           data: { id: editLead.id, status_id },
           onSuccess: updateRemainingFields,
-          onFailure: () => notify("Couldn't change lead stage. Please try again.", { type: "error" }),
+          onFailure: failed("Couldn't change lead stage. Please try again."),
         }),
       );
     } else {
@@ -255,7 +321,7 @@ function LeadsWorkspace() {
           });
           refreshLeads();
         },
-        onFailure: () => notify("Couldn't delete lead. Please try again.", { type: "error" }),
+        onFailure: failed("Couldn't delete lead. Please try again."),
       }),
     );
   };
@@ -269,7 +335,7 @@ function LeadsWorkspace() {
           setSelectedIds(new Set());
           refreshLeads();
         },
-        onFailure: () => notify("Couldn't delete leads. Please try again.", { type: "error" }),
+        onFailure: failed("Couldn't delete leads. Please try again."),
       }),
     );
   };
@@ -283,7 +349,7 @@ function LeadsWorkspace() {
           setSelectedIds(new Set());
           refreshLeads();
         },
-        onFailure: () => notify("Couldn't move leads. Please try again.", { type: "error" }),
+        onFailure: failed("Couldn't move leads. Please try again."),
       }),
     );
   };
@@ -297,7 +363,7 @@ function LeadsWorkspace() {
           setSelectedIds(new Set());
           refreshLeads();
         },
-        onFailure: () => notify("Couldn't reassign leads. Please try again.", { type: "error" }),
+        onFailure: failed("Couldn't reassign leads. Please try again."),
       }),
     );
   };
@@ -307,7 +373,7 @@ function LeadsWorkspace() {
       reqToChangeLeadStage({
         data: { id: leadId, status_id: newStatusId },
         onSuccess: refreshLeads,
-        onFailure: () => notify("Couldn't move lead. Please try again.", { type: "error" }),
+        onFailure: failed("Couldn't move lead. Please try again."),
       }),
     );
   };
@@ -393,8 +459,8 @@ function LeadsWorkspace() {
           onCheckedChange={(checked) =>
             setSelectedIds(checked ? new Set(filteredLeads.map((l) => l.id)) : new Set())
           }
-          aria-label={`Select all ${filteredLeads.length} leads matching the current filters`}
-          title={`Selects all ${filteredLeads.length} leads matching the current filters, not just this page`}
+          aria-label={`Select all ${filteredLeads.length} leads on this page`}
+          title={`Selects the ${filteredLeads.length} leads on this page`}
         />
       ),
       render: (row) => (
@@ -426,7 +492,6 @@ function LeadsWorkspace() {
     {
       key: "statusId",
       header: "Stage",
-      sortable: true,
       accessor: (row) => statuses.find((s) => s.id === row.statusId)?.name ?? "",
       render: (row) => {
         const stage = statuses.find((s) => s.id === row.statusId);
@@ -440,7 +505,6 @@ function LeadsWorkspace() {
     {
       key: "assignedTo",
       header: "Owner",
-      sortable: true,
       accessor: (row) => (row.assignedTo ? resolveOwnerName(owners, row.assignedTo) : ""),
       render: (row) =>
         row.assignedTo ? resolveOwnerName(owners, row.assignedTo) : <span className="text-muted-foreground">Unassigned</span>,
@@ -535,11 +599,15 @@ function LeadsWorkspace() {
           <p className="text-muted-foreground">Track and manage your sales pipeline.</p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+        {canExport && (
+          <ExportButton path={apiRoutes.leadsExport} params={exportParams} fileName="leads.csv" />
+        )}
         <LeadFormDialog
           mode={formMode}
           initialLead={editLead ?? undefined}
           statuses={statuses}
-          owners={owners}
+          owners={formOwners}
           open={formOpen}
           onOpenChange={setFormOpen}
           onSubmit={handleFormSubmit}
@@ -568,6 +636,7 @@ function LeadsWorkspace() {
             </Tooltip>
           </TooltipProvider>
         )}
+        </div>
       </div>
 
       {atLeadLimit && usage?.measures.leads && (
@@ -592,14 +661,29 @@ function LeadsWorkspace() {
 
       {view !== "analytics" && (
         <div className="flex flex-wrap items-center gap-2">
+          {ownership.length > 1 ? (
+            <Select value={ownershipFilter} onValueChange={changeFilter((value: string) => setOwnershipFilter(value as OwnershipFilter))}>
+              <SelectTrigger className="w-44" aria-label="Whose leads"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {ownership.map((choice) => (
+                  <SelectItem key={choice} value={choice}>{OWNERSHIP_LABELS[choice]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <span className="text-sm text-muted-foreground" title="Your role shows you only the leads assigned to you, or that you created and nobody owns.">
+              Showing your leads
+            </span>
+          )}
+
           <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search leads..."
             className="max-w-xs"
           />
 
-          <Select value={stageFilter} onValueChange={setStageFilter}>
+          <Select value={stageFilter} onValueChange={changeFilter(setStageFilter)}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Stages</SelectItem>
@@ -609,7 +693,7 @@ function LeadsWorkspace() {
             </SelectContent>
           </Select>
 
-          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+          <Select value={ownerFilter} onValueChange={changeFilter(setOwnerFilter)}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Owners</SelectItem>
@@ -619,7 +703,7 @@ function LeadsWorkspace() {
             </SelectContent>
           </Select>
 
-          <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <Select value={priorityFilter} onValueChange={changeFilter(setPriorityFilter)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Priorities</SelectItem>
@@ -630,7 +714,7 @@ function LeadsWorkspace() {
             </SelectContent>
           </Select>
 
-          <Select value={temperatureFilter} onValueChange={setTemperatureFilter}>
+          <Select value={temperatureFilter} onValueChange={changeFilter(setTemperatureFilter)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Temperatures</SelectItem>
@@ -645,7 +729,7 @@ function LeadsWorkspace() {
       {selectedIds.size > 0 && view === "list" && canBulk && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
           <span className="text-sm font-medium">
-            {selectedIds.size} selected{selectedIds.size === filteredLeads.length ? " (all filtered leads)" : ""}
+            {selectedIds.size} selected{selectedIds.size === filteredLeads.length ? " (this page)" : ""}
           </span>
 
           <Select onValueChange={handleBulkStageChange}>
@@ -660,7 +744,7 @@ function LeadsWorkspace() {
           <Select onValueChange={handleBulkAssign}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Assign to" /></SelectTrigger>
             <SelectContent>
-              {owners.map((o) => (
+              {assignableOwners.map((o) => (
                 <SelectItem key={o.id} value={o.id}>{o.fullName}</SelectItem>
               ))}
             </SelectContent>
@@ -674,9 +758,7 @@ function LeadsWorkspace() {
               <AlertDialogHeader>
                 <AlertDialogTitle>Delete {selectedIds.size} lead(s)?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  {selectedIds.size === filteredLeads.length
-                    ? "This includes every lead matching your current filters, not just the ones visible on this page. This can't be undone."
-                    : "This can't be undone."}
+                  This can&apos;t be undone.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -697,8 +779,24 @@ function LeadsWorkspace() {
           columns={columns}
           data={filteredLeads}
           getRowId={(row) => row.id}
-          isLoading={isLoading}
+          isLoading={isLoading && filteredLeads.length === 0}
+          pageSize={LIST_PAGE_SIZE}
           emptyMessage="No leads match your filters."
+          manual={{
+            total,
+            page,
+            onPageChange: (next) => {
+              setPage(next);
+              setSelectedIds(new Set());
+            },
+            sortKey: sort.key || undefined,
+            sortDir: sort.dir,
+            onSortChange: (key, dir) => {
+              if (!SORT_FIELDS[key]) return;
+              setSort({ key, dir });
+              setPage(1);
+            },
+          }}
         />
       )}
 

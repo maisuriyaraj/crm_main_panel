@@ -8,7 +8,7 @@ import { notify } from "@/lib/commonFunctions";
 import { indexCatalog, toPermissionList, type SelectionChange } from "@/lib/roles/matrix";
 import { normalizeRoleName, roleFormSchema, type RoleFormValues } from "@/lib/roles/schema";
 import { mapTeamFieldErrors } from "@/lib/team/mappers";
-import type { PermissionModule, TeamApiError, TeamRoleDetail } from "@/lib/team/types";
+import type { PermissionModule, RoleScopes, ScopedModule, TeamApiError, TeamRoleDetail } from "@/lib/team/types";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToCreateTeamRole, reqToUpdateTeamRole } from "@/lib/store/slices/teamRolesSlice";
 import { useTeamFailure } from "@/hooks/useTeamFailure";
@@ -28,6 +28,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PermissionMatrix } from "@/components/team/permission-matrix";
+import { DEFAULT_SCOPE, RecordScopePicker, SCOPED_MODULES } from "@/components/team/record-scope-picker";
 
 const API_FIELDS: Record<string, string> = { name: "name", description: "description" };
 
@@ -62,6 +63,13 @@ const initialPermissions = (role?: TeamRoleDetail | null, source?: TeamRoleDetai
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((key, i) => key === b[i]);
 
+// Duplicating keeps the source's scopes; a new role starts at Own.
+const initialScopes = (role?: TeamRoleDetail | null, source?: TeamRoleDetail | null): RoleScopes => ({ ...(role?.scopes ?? source?.scopes ?? {}) });
+
+// The scope sent for each module the role can view; nothing for the others.
+const scopesFor = (modules: ScopedModule[], scopes: RoleScopes): RoleScopes =>
+  Object.fromEntries(modules.map((module) => [module, scopes[module] ?? DEFAULT_SCOPE]));
+
 export function RoleForm({ modules, role, source, readOnly, onSaved, onCancel, onReload, onDuplicate }: RoleFormProps) {
   const dispatch = useAppDispatch();
   const handleFailure = useTeamFailure();
@@ -73,13 +81,18 @@ export function RoleForm({ modules, role, source, readOnly, onSaved, onCancel, o
     defaultValues: initialValues(role, source),
   });
   const [selected, setSelected] = useState<Set<string>>(() => initialPermissions(role, source));
+  const [scopes, setScopes] = useState<RoleScopes>(() => initialScopes(role, source));
   const [note, setNote] = useState<string | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   const permissionList = toPermissionList(selected, index);
   const startingList = toPermissionList(initialPermissions(role, source), index);
-  const isDirty = !readOnly && (form.formState.isDirty || !sameSet(permissionList, startingList) || (!role && !!source));
+  const visibleModules = SCOPED_MODULES.map(({ module }) => module).filter((module) => permissionList.includes(`${module}.view`));
+  const scopeInput = scopesFor(visibleModules, scopes);
+  const startingScopes = scopesFor(visibleModules, initialScopes(role, source));
+  const scopesChanged = visibleModules.some((module) => scopeInput[module] !== startingScopes[module]);
+  const isDirty = !readOnly && (form.formState.isDirty || !sameSet(permissionList, startingList) || scopesChanged || (!role && !!source));
 
   useEffect(() => {
     if (!isDirty) return;
@@ -124,6 +137,7 @@ export function RoleForm({ modules, role, source, readOnly, onSaved, onCancel, o
       name: normalizeRoleName(values.name),
       description: values.description.trim() || null,
       permissions: permissionList,
+      scopes: scopeInput,
     };
 
     const done = (saved: TeamRoleDetail) => {
@@ -233,6 +247,16 @@ export function RoleForm({ modules, role, source, readOnly, onSaved, onCancel, o
           )}
           <PermissionMatrix modules={modules} selected={selected} onChange={onMatrixChange} disabled={readOnly} />
         </div>
+
+        <RecordScopePicker
+          visibleModules={visibleModules}
+          scopes={scopes}
+          onChange={(next) => {
+            setScopes(next);
+            setBanner(null);
+          }}
+          disabled={readOnly}
+        />
 
         <div className="flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" onClick={cancel}>
