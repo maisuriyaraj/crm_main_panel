@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { KeyRound, LogOut, Monitor, ShieldCheck } from "lucide-react";
+import { KeyRound, LogOut, Monitor, ShieldAlert, ShieldCheck } from "lucide-react";
+
+import { useAuth } from "@/hooks/useAuth";
 
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
@@ -43,6 +45,8 @@ import { reqToRefreshProfile } from "@/lib/store/slices/authSlice";
 // Every signed-in user manages their own password and devices, so this page
 // needs no permission: the API only ever acts on the caller's own account.
 export default function SecuritySettingsPage() {
+  const { isImpersonating } = useAuth();
+
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
@@ -51,10 +55,35 @@ export default function SecuritySettingsPage() {
         </h1>
         <p className="mt-1 text-muted-foreground">Change your password, set up multi-factor sign-in and see where you&apos;re signed in.</p>
       </div>
-      <ChangePasswordCard />
-      <MfaSettingsCard />
-      <SessionsCard />
+      {/* Everything on this page is the member's own credentials, which a
+          support session may never touch; the API refuses it either way. */}
+      {isImpersonating ? <SupportReadOnlyNotice /> : (
+        <>
+          <ChangePasswordCard />
+          <MfaSettingsCard />
+          <SessionsCard />
+        </>
+      )}
     </div>
+  );
+}
+
+function SupportReadOnlyNotice() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <ShieldAlert className="size-5 text-amber-600" aria-hidden /> Not available in a support session
+        </CardTitle>
+        <CardDescription className="mt-1.5">
+          OrbitOps support is signed in as this member, so this page is read-only.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <p>A support session can never change a password, set up or turn off multi-factor sign-in, replace recovery codes, or sign devices out.</p>
+        <p>The member has to do those themselves, signed in with their own account.</p>
+      </CardContent>
+    </Card>
   );
 }
 

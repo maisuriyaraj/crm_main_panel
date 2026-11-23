@@ -6,6 +6,7 @@ import { Toaster } from 'sonner';
 import "./globals.css";
 import StoreProvider from "@/lib/store/StoreProvider";
 import { SessionExpiredDialog } from "@/components/layout/session-expired-dialog";
+import { ImpersonationEndedNotice } from "@/components/layout/impersonation-ended-notice";
 import { SITE_URL } from "@/lib/constants";
 
 const SITE_NAME = "OrbitOps";
@@ -99,6 +100,7 @@ export default function RootLayout({
           {children}
           <Toaster richColors position="top-right" />
           <SessionExpiredDialog />
+          <ImpersonationEndedNotice />
         </body>
       </StoreProvider>
     </html>

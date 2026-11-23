@@ -1,6 +1,13 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, apiRoutes } from "@/lib/constants";
-import { endSession, getSessionSignal, isHeldForMfaStep, isSessionEnded } from "@/lib/auth/session";
+import {
+    endImpersonatedSession,
+    endSession,
+    getSessionSignal,
+    isHeldForMfaStep,
+    isImpersonating,
+    isSessionEnded,
+} from "@/lib/auth/session";
 
 // Auth lives entirely in HttpOnly cookies set by the backend; the browser
 // attaches them via withCredentials, so no token is ever read or stored here.
@@ -39,6 +46,14 @@ export const setSubscriptionInactiveListener = (listener: ((status: string | nul
     subscriptionInactiveListener = listener;
 };
 
+// A 403 IMPERSONATION_RESTRICTED means the server refused something a support
+// session may never do. Screens hide most of those actions, but anything that
+// slips through still has to say why, so the banner shows a notice.
+let impersonationRestrictedListener: ((message: string) => void) | null = null;
+export const setImpersonationRestrictedListener = (listener: ((message: string) => void) | null) => {
+    impersonationRestrictedListener = listener;
+};
+
 Axios.interceptors.request.use((config) => {
     if (isSessionEnded()) {
         return Promise.reject(new axios.CanceledError("Session ended"));
@@ -64,11 +79,25 @@ const refreshSession = () => {
 
 Axios.interceptors.response.use(
     (response) => response,
-    async (error: AxiosError<{ code?: string; subscription_status?: string }>) => {
+    async (error: AxiosError<{ code?: string; subscription_status?: string; reason?: string; message?: string }>) => {
         const originalRequest = error.config as RetriableConfig | undefined;
+
+        // The support session is over (ended, expired, or the staff account was
+        // closed). It has no refresh token, so there is nothing to revive.
+        if (error.response?.status === 401 && error.response.data?.code === "IMPERSONATION_ENDED") {
+            endImpersonatedSession(error.response.data.reason ?? null);
+            return Promise.reject(error);
+        }
 
         if (error.response?.status === 403 && error.response.data?.code === "SUBSCRIPTION_INACTIVE") {
             subscriptionInactiveListener?.(error.response.data.subscription_status ?? null);
+        }
+
+        if (error.response?.status === 403 && error.response.data?.code === "IMPERSONATION_RESTRICTED") {
+            impersonationRestrictedListener?.(
+                error.response.data.message
+                || "Support sessions can't do this. Ask someone in this workspace to do it themselves.",
+            );
         }
 
         if (
@@ -83,6 +112,14 @@ Axios.interceptors.response.use(
         // suspension). A refresh can't revive it, so leave right away.
         if (error.response?.status === 401 && error.response.data?.code === "SESSION_REVOKED") {
             void endSession();
+            return Promise.reject(error);
+        }
+
+        // A support session is issued without a refresh token on purpose, and the
+        // browser may still hold the member's own one: refreshing here would
+        // quietly turn a 30-minute audited session into their real one.
+        if (error.response?.status === 401 && isImpersonating()) {
+            endImpersonatedSession("expired");
             return Promise.reject(error);
         }
 

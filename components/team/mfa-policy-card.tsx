@@ -5,6 +5,7 @@ import { ShieldCheck } from "lucide-react";
 
 import { getMfaPolicy, setMfaPolicy, type MfaPolicy } from "@/lib/auth/mfa";
 import { apiErrorMessage } from "@/lib/auth/errors";
+import { useAuth } from "@/hooks/useAuth";
 import { notify } from "@/lib/commonFunctions";
 import {
   AlertDialog,
@@ -24,6 +25,10 @@ import { Switch } from "@/components/ui/switch";
 // The organization's rule that every member signs in with an authenticator code.
 // Everyone who can see Team sees it; only those who manage members can change it.
 export function MfaPolicyCard({ canManage, version }: { canManage: boolean; version: number }) {
+  // The workspace's security policy is not a support session's to change; the
+  // API refuses it, so the switch is locked rather than failing on click.
+  const { isImpersonating } = useAuth();
+  const locked = isImpersonating || !canManage;
   const [policy, setPolicy] = useState<MfaPolicy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<boolean | null>(null);
@@ -75,15 +80,17 @@ export function MfaPolicyCard({ canManage, version }: { canManage: boolean; vers
           <Switch
             id="require-mfa"
             checked={policy.mfa_required}
-            disabled={!canManage || saving}
+            disabled={locked || saving}
             onCheckedChange={(next) => setConfirming(next)}
-            aria-describedby={canManage ? undefined : "require-mfa-note"}
+            aria-describedby={locked ? "require-mfa-note" : undefined}
           />
         ) : (
           !error && <Skeleton className="h-6 w-11" />
         )}
-        {!canManage && policy && (
-          <p id="require-mfa-note" className="w-full text-xs text-muted-foreground">Only owners and admins can change this.</p>
+        {locked && policy && (
+          <p id="require-mfa-note" className="w-full text-xs text-muted-foreground">
+            {isImpersonating ? "Support sessions can't change this." : "Only owners and admins can change this."}
+          </p>
         )}
       </CardContent>
 

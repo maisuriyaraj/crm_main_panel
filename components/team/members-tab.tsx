@@ -8,6 +8,7 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToGetOrgUsers } from "@/lib/store/slices/orgUsersSlice";
 import type { MemberAction, MemberListQuery, TeamMember } from "@/lib/team/types";
 import { useTeamFailure } from "@/hooks/useTeamFailure";
+import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +46,16 @@ const ROW_ACTIONS: Array<{ action: MemberAction & MemberDialogType; label: strin
   { action: "transfer_ownership", label: "Make owner" },
 ];
 
+// Closed to OrbitOps support acting as a member: someone's role (which is also
+// how they would be promoted), their devices, their multi-factor set-up and who
+// owns the workspace. The API refuses all of these; hiding them only saves a
+// pointless click. See the impersonation spec.
+const SUPPORT_BLOCKED_ACTIONS: Array<MemberAction & MemberDialogType> = [
+  "change_role",
+  "revoke_sessions",
+  "transfer_ownership",
+];
+
 const initials = (name: string) =>
   name
     .split(/\s+/)
@@ -66,6 +77,7 @@ interface MembersTabProps {
 export function MembersTab({ orgName, version, canInvite, roleFilter: requestedRole, onInvite, onChanged }: MembersTabProps) {
   const dispatch = useAppDispatch();
   const handleFailure = useTeamFailure();
+  const { isImpersonating } = useAuth();
   const { users, pagination, isLoading, error } = useAppSelector((state) => state.orgUsers);
   const roles = useAppSelector((state) => state.teamRoles.roles);
   const teams = useAppSelector((state) => state.teams.teams);
@@ -202,10 +214,12 @@ export function MembersTab({ orgName, version, canInvite, roleFilter: requestedR
       key: "actions",
       header: <span className="sr-only">Actions</span>,
       render: (row) => {
-        const available = ROW_ACTIONS.filter(({ action }) => row.allowedActions.includes(action));
+        const available = ROW_ACTIONS.filter(
+          ({ action }) => row.allowedActions.includes(action) && !(isImpersonating && SUPPORT_BLOCKED_ACTIONS.includes(action)),
+        );
         // The API offers no separate flag for it: anyone you may sign out, you may
         // reset, but never yourself, and only when they have MFA on.
-        const canResetMfa = row.mfaEnabled && !row.isSelf && row.allowedActions.includes("revoke_sessions");
+        const canResetMfa = !isImpersonating && row.mfaEnabled && !row.isSelf && row.allowedActions.includes("revoke_sessions");
         const canRemove = row.allowedActions.includes("remove");
 
         return (

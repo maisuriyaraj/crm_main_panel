@@ -12,6 +12,7 @@ Status from reading the code on 2026-10-31. Legend: ✅ implemented · 🟡 part
 | tenant-shell | [Common list behaviours](tenant-shell/list-behaviours/spec.md) | 4.3 | 🟡 | 0 of 8 |
 | tenant-shell | [Tenant settings](tenant-shell/settings/spec.md) | 4.4 | 🟡 | 0 of 4 |
 | tenant-shell | [In-app notifications](tenant-shell/notifications/spec.md) | 4.5 | ❌ | 0 of 2 |
+| tenant-shell | [Tenant impersonation (banner and sign-in screen)](tenant-shell/impersonation/spec.md) | 3.8 | ✅ | 2 of 2 |
 | leads | [Lead fields](leads/lead-fields/spec.md) | 5.1 | 🟡 | 1 of 20 |
 | leads | [Pipelines and stages](leads/pipelines-stages/spec.md) | 5.2 | 🟡 | 0 of 5 |
 | leads | [Lead view modes](leads/view-modes/spec.md) | 5.3 | 🟡 | 0 of 5 |

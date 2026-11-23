@@ -5,6 +5,9 @@ const publicRoutes = [
     pageRoutes.home,
     pageRoutes.signin,
     pageRoutes.signup,
+    // OrbitOps support arrives here with no session at all: the single-use code
+    // in the link's fragment is the only credential, and the API checks it.
+    pageRoutes.impersonate,
 ];
 
 // Signed-in visitors of these are sent to their dashboard. "/" is left out on

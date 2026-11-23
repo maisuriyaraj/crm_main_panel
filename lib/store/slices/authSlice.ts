@@ -36,6 +36,9 @@ export interface AuthUser {
     organizationMfaRequired?: boolean;
     // True only for a member who may run the setup wizard, until it is finished.
     onboardingPending?: boolean;
+    // Present only while OrbitOps support is signed in as this member. It never
+    // names the staff member: `admin_display` is always "OrbitOps support".
+    impersonation?: { session_id: string; expires_at: string; admin_display: string } | null;
 }
 
 interface AuthState {

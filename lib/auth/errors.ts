@@ -58,6 +58,11 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     EXPORT_TOO_LARGE: "This export has more than 10,000 rows. Narrow the filters and try again.",
     // Session and subscription
     SESSION_REVOKED: "Your session has ended. Please sign in again.",
+    // Support (impersonation) sessions
+    IMPERSONATION_RESTRICTED: "Support sessions can't do this. Ask someone in this workspace to do it themselves.",
+    IMPERSONATION_ENDED: "The support session has ended.",
+    IMPERSONATION_CODE_INVALID: "This link is no longer valid. Start again from the Master Admin panel.",
+    NOT_IMPERSONATING: "This isn't a support session.",
     TOKEN_INVALID: "Your session has ended. Please sign in again.",
     SUBSCRIPTION_INACTIVE: "Your subscription has ended. Renew it to use this part of OrbitOps.",
     // Setup wizard and logo

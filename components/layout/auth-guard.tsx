@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
-import { endSession } from "@/lib/auth/session";
+import { endSession, setImpersonating } from "@/lib/auth/session";
 import { setForbiddenListener } from "@/lib/axios";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { reqToFetchMe, reqToRefreshProfile } from "@/lib/store/slices/authSlice";
@@ -18,7 +18,14 @@ export function AuthGuard({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
   const router = useRouter();
   const params = useParams<{ orgnization?: string }>();
-  const { user, isAuthChecked, needResetPassword } = useAuth();
+  const { user, isAuthChecked, needResetPassword, isImpersonating } = useAuth();
+
+  // A reload loses the flag the exchange set, so it is taken from /me on every
+  // load: without it a support session's expiry would try to refresh, and a
+  // leftover refresh cookie could turn it into the member's real session.
+  useEffect(() => {
+    setImpersonating(isImpersonating);
+  }, [isImpersonating]);
   const sessionCheckFailed = useAppSelector((state) => state.auth.sessionCheckFailed);
 
   // `user` comes from /me, i.e. the server-verified JWT, so this is the

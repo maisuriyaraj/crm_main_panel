@@ -43,6 +43,13 @@ const SHEET_ACTIONS: Array<{ action: MemberAction & MemberDialogType; label: str
   { action: "remove", label: "Remove", destructive: true },
 ];
 
+// Closed to OrbitOps support acting as a member: a role change is how someone
+// would be promoted, and who owns the workspace is never support's call.
+const SUPPORT_BLOCKED_SHEET_ACTIONS: Array<MemberAction & MemberDialogType> = [
+  "change_role",
+  "transfer_ownership",
+];
+
 interface MemberDetailSheetProps {
   member: TeamMember | null;
   onOpenChange: (open: boolean) => void;
@@ -52,7 +59,7 @@ interface MemberDetailSheetProps {
 
 export function MemberDetailSheet({ member, onOpenChange, onAction, onChanged }: MemberDetailSheetProps) {
   const dispatch = useAppDispatch();
-  const { can } = useAuth();
+  const { can, isImpersonating } = useAuth();
   const handleFailure = useTeamFailure();
   const detail = useAppSelector((state) => state.orgUsers.activeMember);
   const detailLoading = useAppSelector((state) => state.orgUsers.activeMemberLoading);
@@ -82,7 +89,9 @@ export function MemberDetailSheet({ member, onOpenChange, onAction, onChanged }:
 
   const current = detail && detail.id === member.id ? detail : null;
   const view = current ?? member;
-  const canEditProfile = view.allowedActions.includes("edit_profile");
+  // A member's name, contact details and role are theirs; a support session may
+  // not edit them, and the API refuses it whatever this sheet offers.
+  const canEditProfile = view.allowedActions.includes("edit_profile") && !isImpersonating;
 
   const startEdit = () => {
     setFullName(view.fullName);
@@ -126,16 +135,19 @@ export function MemberDetailSheet({ member, onOpenChange, onAction, onChanged }:
             {view.isSelf && <Badge variant="outline">You</Badge>}
           </div>
           <div className="flex flex-wrap gap-2 pt-2">
-            {SHEET_ACTIONS.filter(({ action }) => view.allowedActions.includes(action)).map(({ action, label, destructive }) => (
-              <Button
-                key={action}
-                size="sm"
-                variant={destructive ? "destructive" : "outline"}
-                onClick={() => onAction(action, view)}
-              >
-                {label}
-              </Button>
-            ))}
+            {SHEET_ACTIONS
+              .filter(({ action }) => view.allowedActions.includes(action)
+                && !(isImpersonating && SUPPORT_BLOCKED_SHEET_ACTIONS.includes(action)))
+              .map(({ action, label, destructive }) => (
+                <Button
+                  key={action}
+                  size="sm"
+                  variant={destructive ? "destructive" : "outline"}
+                  onClick={() => onAction(action, view)}
+                >
+                  {label}
+                </Button>
+              ))}
           </div>
         </SheetHeader>
 

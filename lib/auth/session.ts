@@ -68,6 +68,45 @@ export const holdForMfaStep = (on: boolean) => {
 };
 export const isHeldForMfaStep = () => mfaStepHold;
 
+// ─── Support (impersonation) sessions ────────────────────────────────────────
+
+// True while this tab is OrbitOps support acting as a member. Such a session has
+// no refresh token by design, so nothing may try to refresh it, and when it ends
+// there is nowhere to sign back in to — the tab is simply finished.
+let impersonating = false;
+export const setImpersonating = (on: boolean) => {
+    impersonating = on;
+};
+export const isImpersonating = () => impersonating;
+
+// Set by the mounted <ImpersonationEndedNotice />. It is shown instead of the
+// sign-in redirect an ordinary expiry gets.
+type ImpersonationEndedHandler = (reason: string | null) => void;
+let impersonationEndedHandler: ImpersonationEndedHandler | null = null;
+
+export const registerImpersonationEndedNotice = (handler: ImpersonationEndedHandler) => {
+    impersonationEndedHandler = handler;
+    return () => {
+        if (impersonationEndedHandler === handler) impersonationEndedHandler = null;
+    };
+};
+
+// The end of a support session. Like endSession it stops every request and wipes
+// this tab, but it never calls logout (that would be a second decision about the
+// member's own cookies), never tells other tabs (a support session belongs to
+// this browser alone) and never redirects: the staff member closes the tab.
+export const endImpersonatedSession = (reason: string | null = null) => {
+    if (sessionEnded) return;
+    sessionEnded = true;
+    impersonating = false;
+
+    pendingRequests.abort();
+    listeners.forEach((listener) => listener());
+    clearClientSession();
+
+    impersonationEndedHandler?.(reason);
+};
+
 export const getSessionSignal = () => pendingRequests.signal;
 
 export const onSessionEnded = (listener: () => void) => {

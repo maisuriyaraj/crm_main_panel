@@ -10,6 +10,10 @@ export const pageRoutes = {
     // Forced first-login reset for admin-issued temporary passwords.
     resetPassword: "/auth/reset-password",
     acceptInvite: "/auth/accept-invite",
+    // Where OrbitOps support lands with the single-use code from the Master
+    // Admin panel (code in the URL fragment). Not inside a workspace: there is
+    // no session yet when it opens.
+    impersonate: "/impersonate",
     dashboard: "/dashboard",
     settingsTeam: "/settings/team",
     settingsSecurity: "/settings/security",
@@ -95,6 +99,10 @@ export const apiRoutes = {
     mfaDisable: "/auth/mfa/disable",
     mfaRecoveryCodes: "/auth/mfa/recovery-codes",
     mfaPolicy: "/app/security/mfa-policy",
+    // Tenant impersonation: the exchange takes the single-use code and no token;
+    // ending takes the support session's own token.
+    impersonationExchange: "/auth/impersonation/exchange",
+    impersonationEnd: "/auth/impersonation/end",
     // First-login setup wizard and the organization logo.
     onboarding: "/app/onboarding",
     onboardingCompany: "/app/onboarding/company",

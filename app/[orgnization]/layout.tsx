@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AuthGuard } from "@/components/layout/auth-guard";
+import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
+import { ImpersonationFrame } from "@/components/layout/impersonation-frame";
 import { WorkspaceGate } from "@/components/layout/workspace-gate";
 import { NotificationsBell } from "@/components/layout/notifications-bell";
 import { UsageBanner } from "@/components/usage/usage-banner";
@@ -20,26 +22,31 @@ export default async function OrgLayout({ children }: { children: ReactNode }) {
 
   return (
     <AuthGuard>
-      <SidebarProvider defaultOpen={sidebarState !== "false"}>
-        <AppSidebar />
-        {/* min-w-0 lets this flex item shrink below its content's width, so
-            wide children (the Kanban board) scroll themselves instead of
-            stretching the page horizontally. */}
-        <SidebarInset className="min-w-0">
-          <header className="flex h-14 items-center gap-2 border-b border-border px-4">
-            <SidebarTrigger />
-            <div className="ml-auto">
-              <NotificationsBell />
+      {/* Above the shell, so a support session is unmistakable on every page
+          and at every width; the frame tints the edges to match. */}
+      <ImpersonationBanner />
+      <ImpersonationFrame>
+        <SidebarProvider defaultOpen={sidebarState !== "false"}>
+          <AppSidebar />
+          {/* min-w-0 lets this flex item shrink below its content's width, so
+              wide children (the Kanban board) scroll themselves instead of
+              stretching the page horizontally. */}
+          <SidebarInset className="min-w-0">
+            <header className="flex h-14 items-center gap-2 border-b border-border px-4">
+              <SidebarTrigger />
+              <div className="ml-auto">
+                <NotificationsBell />
+              </div>
+            </header>
+
+            <UsageBanner />
+
+            <div className="flex-1 p-6">
+              <WorkspaceGate>{children}</WorkspaceGate>
             </div>
-          </header>
-
-          <UsageBanner />
-
-          <div className="flex-1 p-6">
-            <WorkspaceGate>{children}</WorkspaceGate>
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
+          </SidebarInset>
+        </SidebarProvider>
+      </ImpersonationFrame>
     </AuthGuard>
   );
 }
