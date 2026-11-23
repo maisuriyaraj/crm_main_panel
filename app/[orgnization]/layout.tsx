@@ -7,9 +7,9 @@ import { AuthGuard } from "@/components/layout/auth-guard";
 import { ImpersonationBanner } from "@/components/layout/impersonation-banner";
 import { ImpersonationFrame } from "@/components/layout/impersonation-frame";
 import { WorkspaceGate } from "@/components/layout/workspace-gate";
-import { NotificationsBell } from "@/components/layout/notifications-bell";
+import { TopBar } from "@/components/layout/top-bar";
 import { UsageBanner } from "@/components/usage/usage-banner";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
 // Signed-in workspace pages are private, so keep them out of search results.
 export const metadata: Metadata = {
@@ -32,16 +32,13 @@ export default async function OrgLayout({ children }: { children: ReactNode }) {
               wide children (the Kanban board) scroll themselves instead of
               stretching the page horizontally. */}
           <SidebarInset className="min-w-0">
-            <header className="flex h-14 items-center gap-2 border-b border-border px-4">
-              <SidebarTrigger />
-              <div className="ml-auto">
-                <NotificationsBell />
-              </div>
-            </header>
+            <TopBar />
 
             <UsageBanner />
 
-            <div className="flex-1 p-6">
+            {/* A narrow phone can't spare 24px of gutter on each side, so the
+                padding only opens up once there is room for it. */}
+            <div className="min-w-0 flex-1 p-4 sm:p-6">
               <WorkspaceGate>{children}</WorkspaceGate>
             </div>
           </SidebarInset>

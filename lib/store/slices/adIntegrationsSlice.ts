@@ -18,6 +18,20 @@ export interface AdAccount {
     selected: boolean;
 }
 
+export interface AdConnection {
+    status: AdConnectionStatus;
+    external_user_name: string | null;
+    scopes: string[];
+    connected_at: string | null;
+    expires_at: string | null;
+    last_error: string | null;
+    // When the hourly or on-demand sync last finished, and why it last didn't.
+    last_synced_at: string | null;
+    last_sync_error: string | null;
+    syncing: boolean;
+    accounts: AdAccount[];
+}
+
 export interface AdProviderState {
     provider: AdProvider;
     name: string;
@@ -26,15 +40,66 @@ export interface AdProviderState {
     // OrbitOps has entered its own credentials for this platform.
     configured: boolean;
     status: AdConnectionStatus;
-    connection: {
-        status: AdConnectionStatus;
-        external_user_name: string | null;
-        scopes: string[];
-        connected_at: string | null;
-        expires_at: string | null;
-        last_error: string | null;
-        accounts: AdAccount[];
-    } | null;
+    connection: AdConnection | null;
+}
+
+// What one refresh did. `status` is the platform's answer, not an HTTP failure:
+// the connection is still there even when it says `failed`.
+export interface AdSyncResult {
+    status: "ok" | "failed" | "reconnect_required" | "in_progress";
+    reason?: string | null;
+    since?: string;
+    until?: string;
+    accounts?: number;
+    campaigns_created?: number;
+    campaigns_updated?: number;
+    metric_rows?: number;
+    no_accounts_selected?: boolean;
+}
+
+// Money comes in the ad account's own currency and smallest unit (paise, cents),
+// so a figure is only ever shown with the currency beside it.
+export interface AdCampaignMetrics {
+    impressions: number;
+    clicks: number;
+    spend_minor: number;
+    leads: number | null;
+    days: number;
+    ctr: number | null;
+    cpc_minor: number | null;
+    cpm_minor: number | null;
+}
+
+export interface AdCampaign {
+    id: string;
+    external_id: string;
+    name: string | null;
+    status: string | null;
+    objective: string | null;
+    currency: string | null;
+    budget_daily_minor: number | null;
+    budget_lifetime_minor: number | null;
+    starts_at: string | null;
+    ends_at: string | null;
+    last_synced_at: string | null;
+    account: { id: string; name: string | null; currency: string | null } | null;
+    metrics: AdCampaignMetrics;
+}
+
+export interface AdCampaignTotals extends Omit<AdCampaignMetrics, "days" | "leads"> {
+    currency: string;
+    campaigns: number;
+    leads: number | null;
+}
+
+export interface AdCampaignPage {
+    provider: AdProvider;
+    campaigns: AdCampaign[];
+    totals: AdCampaignTotals[];
+    range: { from: string; to: string };
+    last_synced_at: string | null;
+    connection_status: AdConnectionStatus;
+    pagination: { total: number; page: number; limit: number; totalPages: number };
 }
 
 interface AdIntegrationsState {
@@ -42,6 +107,12 @@ interface AdIntegrationsState {
     isLoaded: boolean;
     isLoading: boolean;
     pending: AdProvider | null;
+    // The platform whose figures are being refreshed right now.
+    syncing: AdProvider | null;
+    lastSync: { provider: AdProvider; result: AdSyncResult } | null;
+    campaigns: AdCampaignPage | null;
+    campaignsLoading: boolean;
+    campaignsError: string | null;
     error: string | null;
 }
 
@@ -50,6 +121,11 @@ const initialState: AdIntegrationsState = {
     isLoaded: false,
     isLoading: false,
     pending: null,
+    syncing: null,
+    lastSync: null,
+    campaigns: null,
+    campaignsLoading: false,
+    campaignsError: null,
     error: null,
 };
 
@@ -118,6 +194,71 @@ export const reqToDisconnectAdProvider = createAsyncThunk<Overview & { revoked_a
     },
 );
 
+// Refresh: the API syncs inside the request, so the answer already carries the
+// result and the fresh overview.
+export const reqToSyncAdProvider = createAsyncThunk<
+    Overview & { provider: AdProvider; sync: AdSyncResult },
+    ThunkArg<{ provider: AdProvider }, Overview & { provider: AdProvider; sync: AdSyncResult }>,
+    Rejection
+>(
+    "adIntegrations/reqToSyncAdProvider",
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+        try {
+            const result = (await Axios.post(`${apiRoutes.adIntegrations}/${data.provider}/sync`, {})).data.data;
+            onSuccess?.(result);
+            return result;
+        } catch (error) {
+            onFailure?.(error);
+            return rejectWithValue(rejectMessage(error, "Couldn't refresh the figures"));
+        }
+    },
+);
+
+export interface AdCampaignQuery {
+    provider: AdProvider;
+    from?: string;
+    to?: string;
+    accountId?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+}
+
+// The campaigns the sync stored, with the chosen range's figures added up. This
+// calls no ad platform, so it answers whether or not they are reachable.
+export const reqToGetAdCampaigns = createAsyncThunk<AdCampaignPage, ThunkArg<AdCampaignQuery, AdCampaignPage>, Rejection>(
+    "adIntegrations/reqToGetAdCampaigns",
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+        try {
+            const response = await Axios.get(`${apiRoutes.adIntegrations}/${data.provider}/campaigns`, {
+                params: {
+                    ...(data.from ? { from: data.from } : {}),
+                    ...(data.to ? { to: data.to } : {}),
+                    ...(data.accountId ? { account_id: data.accountId } : {}),
+                    ...(data.status ? { status: data.status } : {}),
+                    ...(data.page ? { page: data.page } : {}),
+                    limit: data.limit ?? 25,
+                },
+            });
+            const body = response.data;
+            const result: AdCampaignPage = {
+                provider: data.provider,
+                campaigns: (body.data ?? []) as AdCampaign[],
+                totals: (body.totals ?? []) as AdCampaignTotals[],
+                range: body.range ?? { from: data.from ?? "", to: data.to ?? "" },
+                last_synced_at: body.last_synced_at ?? null,
+                connection_status: body.connection_status ?? "not_connected",
+                pagination: body.pagination ?? { total: 0, page: 1, limit: data.limit ?? 25, totalPages: 0 },
+            };
+            onSuccess?.(result);
+            return result;
+        } catch (error) {
+            onFailure?.(error);
+            return rejectWithValue(rejectMessage(error, "Couldn't load your campaigns"));
+        }
+    },
+);
+
 const adIntegrationsSlice = createSlice({
     name: "adIntegrations",
     initialState,
@@ -157,7 +298,43 @@ const adIntegrationsSlice = createSlice({
                 state.isLoaded = true;
             });
         }
+
+        // A refresh has its own pending flag: the connection cards stay usable
+        // while the figures are being pulled.
+        builder.addCase(reqToSyncAdProvider.pending, (state, action) => {
+            state.syncing = action.meta.arg.data.provider;
+            state.error = null;
+        });
+        builder.addCase(reqToSyncAdProvider.fulfilled, (state, action) => {
+            state.syncing = null;
+            state.providers = action.payload.providers;
+            state.isLoaded = true;
+            state.lastSync = { provider: action.payload.provider, result: action.payload.sync };
+        });
+        builder.addCase(reqToSyncAdProvider.rejected, (state, action) => {
+            state.syncing = null;
+            state.error = action.payload?.message || "An error occurred";
+        });
+
+        builder.addCase(reqToGetAdCampaigns.pending, (state) => {
+            state.campaignsLoading = true;
+            state.campaignsError = null;
+        });
+        builder.addCase(reqToGetAdCampaigns.fulfilled, (state, action) => {
+            state.campaignsLoading = false;
+            state.campaignsError = null;
+            state.campaigns = action.payload;
+        });
+        builder.addCase(reqToGetAdCampaigns.rejected, (state, action) => {
+            state.campaignsLoading = false;
+            state.campaignsError = action.payload?.message || "An error occurred";
+        });
     },
 });
+
+// Platforms whose connection has stopped working, so the member must connect
+// again. A platform that was never connected is not one of them.
+export const providersNeedingReconnect = (providers: AdProviderState[]) =>
+    providers.filter((entry) => entry.enabled && (entry.status === "expired" || entry.status === "error"));
 
 export default adIntegrationsSlice.reducer;

@@ -5,6 +5,8 @@ import { CheckCircle2, CircleAlert, Link2, Unplug } from "lucide-react";
 
 import { API_ERROR_MESSAGES, apiErrorMessage } from "@/lib/auth/errors";
 import { notify } from "@/lib/commonFunctions";
+import { describeAgo } from "@/lib/ads/format";
+import { useAuth } from "@/hooks/useAuth";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   reqToConnectAdProvider,
@@ -32,12 +34,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StepAlert } from "@/components/auth/mfa/code-form";
+import { AdRefreshButton } from "@/components/ads/refresh-button";
 
 const STATUS_LABEL: Record<AdConnectionStatus, string> = {
   not_configured: "Not configured by OrbitOps yet",
   not_connected: "Not connected",
   connected: "Connected",
-  expired: "Expired",
+  expired: "Needs reconnect",
   revoked: "Not connected",
   error: "Error",
 };
@@ -68,8 +71,17 @@ export const callbackMessage = (search: URLSearchParams): { ok: boolean; text: s
 
 // The Meta and Google cards: status, Connect, choose accounts, Disconnect. Only
 // providers in the organization's plan are shown. `returnTo` is where the provider's
-// redirect lands afterwards.
-export function AdIntegrationsPanel({ returnTo, compact = false }: { returnTo: "setup" | "settings"; compact?: boolean }) {
+// redirect lands afterwards. `showSync` adds the last-synced line and the Refresh
+// button, which belong on the Ads Manager page rather than in the setup wizard.
+export function AdIntegrationsPanel({
+  returnTo,
+  compact = false,
+  showSync = false,
+}: {
+  returnTo: "setup" | "settings";
+  compact?: boolean;
+  showSync?: boolean;
+}) {
   const dispatch = useAppDispatch();
   const { providers, isLoaded, isLoading, error } = useAppSelector((state) => state.adIntegrations);
 
@@ -100,14 +112,18 @@ export function AdIntegrationsPanel({ returnTo, compact = false }: { returnTo: "
     <div className={compact ? "space-y-4" : "grid gap-4 lg:grid-cols-2"}>
       {shown.map((entry) => (
         // Keyed by the connection, so a new connection starts with its own selection.
-        <ProviderCard key={`${entry.provider}-${entry.connection?.connected_at ?? "none"}`} entry={entry} returnTo={returnTo} />
+        <ProviderCard key={`${entry.provider}-${entry.connection?.connected_at ?? "none"}`} entry={entry} returnTo={returnTo} showSync={showSync} />
       ))}
     </div>
   );
 }
 
-function ProviderCard({ entry, returnTo }: { entry: AdProviderState; returnTo: "setup" | "settings" }) {
+function ProviderCard({ entry, returnTo, showSync }: { entry: AdProviderState; returnTo: "setup" | "settings"; showSync: boolean }) {
   const dispatch = useAppDispatch();
+  // Connecting a whole company's ad accounts is both an ads action and a settings
+  // action, which is what the API checks too; without both, the card is read only.
+  const { canAll } = useAuth();
+  const canManage = canAll(["ads.manage", "organization.settings.manage"]);
   const pending = useAppSelector((state) => state.adIntegrations.pending) === entry.provider;
   const connection = entry.connection;
   const accounts = useMemo(() => connection?.accounts ?? [], [connection]);
@@ -227,19 +243,48 @@ function ProviderCard({ entry, returnTo }: { entry: AdProviderState; returnTo: "
                     </li>
                   ))}
                 </ul>
-                <Button size="sm" onClick={save} disabled={!selectionChanged || pending}>{pending ? "Saving…" : "Save accounts"}</Button>
+                {canManage && (
+                  <Button size="sm" onClick={save} disabled={!selectionChanged || pending}>{pending ? "Saving…" : "Save accounts"}</Button>
+                )}
               </fieldset>
             )}
+            {accounts.length > 0 && accounts.every((account) => !account.selected) && (
+              <p className="text-sm text-muted-foreground">
+                No ad accounts are chosen yet, so nothing is being synced.
+              </p>
+            )}
           </div>
+        )}
+
+        {showSync && connection && status === "connected" && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Figures last updated {describeAgo(connection.last_synced_at)}
+              {connection.last_sync_error ? ` · ${connection.last_sync_error}` : ""}
+            </p>
+            <AdRefreshButton
+              provider={entry.provider}
+              name={entry.name}
+              lastSyncedAt={connection.last_synced_at}
+              canRefresh={canManage}
+            />
+          </div>
+        )}
+
+        {!canManage && (
+          <p className="text-xs text-muted-foreground">
+            You can see this connection but not change it. Ask an owner or admin to connect, choose
+            accounts or disconnect.
+          </p>
         )}
 
         <StepAlert message={localError} />
 
         <div className="flex flex-wrap gap-2">
-          {status !== "not_configured" && status !== "connected" && (
+          {canManage && status !== "not_configured" && status !== "connected" && (
             <Button onClick={connect} disabled={pending}><Link2 aria-hidden /> {pending ? "Opening…" : status === "not_connected" ? `Connect ${entry.name}` : `Connect ${entry.name} again`}</Button>
           )}
-          {connection && (
+          {canManage && connection && (
             <Button variant="outline" onClick={() => setConfirmDisconnect(true)} disabled={pending}><Unplug aria-hidden /> Disconnect</Button>
           )}
         </div>

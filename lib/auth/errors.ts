@@ -98,6 +98,10 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     NO_REFRESH_TOKEN: "Google didn't allow ongoing access. Remove OrbitOps from your Google account's connected apps, then connect again.",
     PROVIDER_UNAVAILABLE: "The ad platform couldn't be reached. Please try again in a few minutes.",
     PROVIDER_ERROR: "Something went wrong while connecting. Please try again.",
+    // Refreshing the figures. The platforms are re-read every hour anyway, so a
+    // refused refresh is never something the member has to fix.
+    SYNC_TOO_SOON: "This platform was refreshed a moment ago. Try again in a few minutes.",
+    SYNC_IN_PROGRESS: "A refresh is already running. The figures will update in a moment.",
 };
 
 export const apiErrorCode = (error: unknown): string | undefined =>

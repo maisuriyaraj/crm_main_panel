@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import { notify } from "@/lib/commonFunctions";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useAuth } from "@/hooks/useAuth";
+import { useCreateFromUrl } from "@/hooks/useCreateFromUrl";
 import {
   reqToAddLeadActivity,
   reqToBulkDeleteLeads,
@@ -241,6 +242,9 @@ function LeadsWorkspace() {
     setEditLead(null);
     setFormOpen(true);
   };
+
+  // Opens this form when the top bar's Create menu links here with ?new=1.
+  useCreateFromUrl(openCreate);
 
   const openEdit = (lead: Lead) => {
     setFormMode("edit");

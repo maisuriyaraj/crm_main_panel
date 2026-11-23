@@ -57,10 +57,15 @@ export function AuthGuard({ children }: { children: ReactNode }) {
       if (document.visibilityState === "visible") refresh(PROFILE_REFRESH_INTERVAL_MS);
     };
 
+    // Both events are needed: visibilitychange covers switching tabs, while
+    // window focus covers switching to another app and back, which leaves the
+    // tab "visible" the whole time and so fires no visibility change.
     document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener("focus", onFocus);
     setForbiddenListener(() => refresh(FORBIDDEN_REFRESH_INTERVAL_MS));
     return () => {
       document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener("focus", onFocus);
       setForbiddenListener(null);
     };
   }, [dispatch, hasUser]);

@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 
 // What still works after a subscription ends, as the API allows: team, settings
 // and the setup wizard. Every other module answers 403 SUBSCRIPTION_INACTIVE.
+// "/settings" covers Billing, which is the point: the invoices that have to be
+// settled to get the modules back must stay readable while everything else is shut.
 const OPEN_WHEN_INACTIVE = ["/settings", pageRoutes.setup];
 
 const isUnder = (path: string, roots: string[]) => roots.some((root) => path === root || path.startsWith(`${root}/`));

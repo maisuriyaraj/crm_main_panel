@@ -16,6 +16,7 @@ import onboardingReducer from "./slices/onboardingSlice";
 import adIntegrationsReducer from "./slices/adIntegrationsSlice";
 import usageReducer from "./slices/usageSlice";
 import notificationsReducer from "./slices/notificationsSlice";
+import billingReducer from "./slices/billingSlice";
 import { onSessionEnded } from "@/lib/auth/session";
 
 // Import additional slice reducers here as the project grows
@@ -38,6 +39,7 @@ const appReducer = combineReducers({
   adIntegrations: adIntegrationsReducer,
   usage: usageReducer,
   notifications: notificationsReducer,
+  billing: billingReducer,
   // Add more reducers here as you create new slices
 });
 

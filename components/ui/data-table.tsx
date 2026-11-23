@@ -17,11 +17,31 @@ import {
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+
+// The page numbers to show: always the first and last, the current one and its
+// neighbours, with a gap marker standing in for the rest. Listing every page
+// instead overflows a narrow phone and makes the whole page scroll sideways.
+const pageWindow = (current: number, total: number): (number | "gap")[] => {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+
+  const pages = new Set<number>([1, total, current]);
+  if (current - 1 > 1) pages.add(current - 1);
+  if (current + 1 < total) pages.add(current + 1);
+  // Keep the row a steady width near both ends, so it doesn't jump about.
+  if (current <= 3) [2, 3, 4].forEach((page) => pages.add(page));
+  if (current >= total - 2) [total - 3, total - 2, total - 1].forEach((page) => pages.add(page));
+
+  const sorted = [...pages].filter((page) => page >= 1 && page <= total).sort((a, b) => a - b);
+  return sorted.flatMap((page, index) =>
+    index > 0 && page - sorted[index - 1] > 1 ? ["gap" as const, page] : [page],
+  );
+};
 
 export interface DataTableColumn<T> {
   key: string;
@@ -229,7 +249,9 @@ export function DataTable<T>({
 
       {totalPages > 1 && (
         <Pagination>
-          <PaginationContent>
+          {/* Wrapping is the last resort if a row of pages still doesn't fit:
+              it drops to a second line rather than scrolling the page sideways. */}
+          <PaginationContent className="flex-wrap justify-center">
             <PaginationItem>
               <PaginationPrevious
                 href="#"
@@ -241,20 +263,26 @@ export function DataTable<T>({
               />
             </PaginationItem>
 
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNumber) => (
-              <PaginationItem key={pageNumber}>
-                <PaginationLink
-                  href="#"
-                  isActive={pageNumber === currentPage}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    setPage(pageNumber);
-                  }}
-                >
-                  {pageNumber}
-                </PaginationLink>
-              </PaginationItem>
-            ))}
+            {pageWindow(currentPage, totalPages).map((pageNumber, index) =>
+              pageNumber === "gap" ? (
+                <PaginationItem key={`gap-${index}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={pageNumber}>
+                  <PaginationLink
+                    href="#"
+                    isActive={pageNumber === currentPage}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setPage(pageNumber);
+                    }}
+                  >
+                    {pageNumber}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )}
 
             <PaginationItem>
               <PaginationNext

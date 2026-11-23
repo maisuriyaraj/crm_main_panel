@@ -6,6 +6,7 @@ import { notify } from "@/lib/commonFunctions";
 
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useAuth } from "@/hooks/useAuth";
+import { useCreateFromUrl } from "@/hooks/useCreateFromUrl";
 import {
   reqToBulkDeleteContacts,
   reqToBulkUpdateContacts,
@@ -150,6 +151,9 @@ function ContactsWorkspace() {
     setServerErrors([]);
     setFormOpen(true);
   };
+
+  // Opens this form when the top bar's Create menu links here with ?new=1.
+  useCreateFromUrl(openCreate);
 
   const openEdit = (contact: Contact) => {
     setFormMode("edit");

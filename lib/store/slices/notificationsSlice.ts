@@ -61,6 +61,21 @@ export const reqToMarkNotificationRead = createAsyncThunk<AppNotification, Thunk
   }
 );
 
+export const reqToMarkAllNotificationsRead = createAsyncThunk<{ marked: number }, Partial<ThunkArg<null, { marked: number }>>, { rejectValue: { message: string } }>(
+  "notifications/reqToMarkAllNotificationsRead",
+  async ({ onSuccess, onFailure } = {}, { rejectWithValue }) => {
+    try {
+      const response = await Axios.post(apiRoutes.notificationsReadAll, {});
+      const result = { marked: Number(response.data?.data?.marked ?? 0) };
+      onSuccess?.(result);
+      return result;
+    } catch (error) {
+      onFailure?.(error);
+      return rejectWithValue({ message: messageOf(error, "Couldn't mark everything as read") });
+    }
+  }
+);
+
 const notificationsSlice = createSlice({
   name: "notifications",
   initialState,
@@ -88,6 +103,19 @@ const notificationsSlice = createSlice({
           item.readAt = action.payload.readAt;
           state.unreadCount = Math.max(state.unreadCount - 1, 0);
         }
+      })
+      // The server stamped every unread row, so the list in hand is updated
+      // rather than refetched: the bell stays still instead of flickering.
+      .addCase(reqToMarkAllNotificationsRead.fulfilled, (state) => {
+        const readAt = new Date().toISOString();
+        state.items.forEach((item) => {
+          if (!item.readAt) item.readAt = readAt;
+        });
+        state.unreadCount = 0;
+        state.error = null;
+      })
+      .addCase(reqToMarkAllNotificationsRead.rejected, (state, action) => {
+        state.error = action.payload?.message ?? "Couldn't mark everything as read";
       });
   },
 });

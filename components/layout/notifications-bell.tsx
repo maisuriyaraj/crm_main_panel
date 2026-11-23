@@ -9,7 +9,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { reqToGetNotifications, reqToMarkNotificationRead } from "@/lib/store/slices/notificationsSlice";
+import {
+  reqToGetNotifications,
+  reqToMarkAllNotificationsRead,
+  reqToMarkNotificationRead,
+} from "@/lib/store/slices/notificationsSlice";
 import { cn } from "@/lib/utils";
 import type { AppNotification } from "@/lib/usage/types";
 
@@ -45,6 +49,13 @@ export function NotificationsBell() {
     if (item.type.startsWith("usage.")) {
       setOpen(false);
       router.push(buildOrgRoute(params?.orgnization ?? "", pageRoutes.settingsUsage));
+      return;
+    }
+    // An ad platform that stopped working is fixed by connecting again, which
+    // happens on the Ads Manager page.
+    if (item.type === "integration.reconnect_required") {
+      setOpen(false);
+      router.push(buildOrgRoute(params?.orgnization ?? "", pageRoutes.adsManager));
     }
   };
 
@@ -63,10 +74,25 @@ export function NotificationsBell() {
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-80 p-0">
-        <div className="border-b border-border px-4 py-3">
-          <p className="font-medium">Notifications</p>
-          <p className="text-xs text-muted-foreground">{unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up."}</p>
+        <div className="flex items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div className="min-w-0">
+            <p className="font-medium">Notifications</p>
+            <p className="text-xs text-muted-foreground">{unreadCount > 0 ? `${unreadCount} unread` : "You're all caught up."}</p>
+          </div>
+          {unreadCount > 0 && (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto shrink-0 p-0 text-xs"
+              onClick={() => dispatch(reqToMarkAllNotificationsRead({}))}
+            >
+              Mark all read
+            </Button>
+          )}
         </div>
+        {/* A failed mark-all leaves the list readable, so it is said here rather
+            than replacing everything with an error. */}
+        {error && isLoaded && <p className="px-4 pt-3 text-sm text-destructive">{error}</p>}
         {error && !isLoaded ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">Couldn&apos;t load notifications. Try again in a moment.</p>
         ) : !isLoaded && isLoading ? (

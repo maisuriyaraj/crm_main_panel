@@ -20,19 +20,17 @@ export const pageRoutes = {
     settingsUsage: "/settings/usage",
     setup: "/setup",
     settingsIntegrations: "/settings/integrations",
+    settingsBilling: "/settings/billing",
     settingsTeamRoles: "/settings/team/roles",
     settingsTeamRoleNew: "/settings/team/roles/new",
     leads: "/leads",
     contacts: "/contacts",
-    companies: "/companies",
-    deals: "/deals",
-    tasks: "/tasks",
-    adsManagerOverview: "/ads-manager/overview",
+    // Ads Manager. Overview is where ad platforms are connected and where a
+    // "connect again" notice links back to; Campaigns shows what the hourly sync
+    // pulled back. The other tabs in the SRS (Ad Sets, Creatives, Audiences, A/B
+    // testing, Analytics) have no page yet and so no route here.
+    adsManager: "/ads-manager",
     adsManagerCampaigns: "/ads-manager/campaigns",
-    adsManagerAnalytics: "/ads-manager/analytics",
-    adsManagerAssets: "/ads-manager/assets",
-    adsManagerAccountCenter: "/ads-manager/account-center",
-    growth: "/growth",
 }
 
 // Joins an org id/slug with a pageRoutes value. `route` already carries its
@@ -87,7 +85,10 @@ export const apiRoutes = {
     storageUsage: "/storage/usage",
     usage: "/app/usage",
     usageHeldLeads: "/app/usage/held-leads",
+    // The organization's own invoices from OrbitOps, read only.
+    billingInvoices: "/app/billing/invoices",
     notifications: "/app/notifications",
+    notificationsReadAll: "/app/notifications/read-all",
     // Multi-factor sign-in: the three sign-in steps take the short-lived MFA token,
     // the rest act on the signed-in member.
     mfaEnrollStart: "/auth/mfa/enroll/start",
@@ -110,6 +111,8 @@ export const apiRoutes = {
     onboardingLogo: "/app/onboarding/logo",
     onboardingComplete: "/app/onboarding/complete",
     organizationLogo: "/app/organization/logo",
-    // Connecting Meta and Google ad accounts ("/{provider}/connect", "/{provider}/accounts", "/{provider}").
+    // Connecting Meta and Google ad accounts, and what the sync pulled back
+    // ("/{provider}/connect", "/{provider}/accounts", "/{provider}",
+    // "/{provider}/sync", "/{provider}/campaigns").
     adIntegrations: "/app/integrations/ads",
 }

@@ -21,14 +21,18 @@ const EMPLOYEE = [
 ];
 const MANAGER = [...EMPLOYEE, "team.view"];
 
+// `moduleOff` says why a whole module is closed for the organization; nothing is
+// closed in these cases, so every entry is decided by the permission alone.
 const menuFor = (permissions) =>
-    visibleNavGroups(navGroups, (key) => permissions.includes(key)).map(
+    visibleNavGroups(navGroups, (key) => permissions.includes(key), () => null).map(
         (group) => `${group.label}: ${group.items.map((item) => item.label).join(", ")}`
     );
 
+// The live nav: Companies, Deals, Tasks and Growth were dropped when their pages
+// turned out not to exist, and Ads Manager returned with its own pages.
 const FULL_MENU = [
-    "Workspace: Dashboard, Leads, Contacts, Companies, Deals, Tasks",
-    "Growth: Ads Manager, Growth",
+    "Workspace: Dashboard, Leads, Contacts",
+    "Advertising: Ads Manager, Ad campaigns",
     "Organization: Team",
 ];
 

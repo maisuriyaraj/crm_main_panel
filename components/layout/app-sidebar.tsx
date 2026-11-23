@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import { Building2, ChevronRight, Gauge, LogOut, Moon, Plug, Rocket, ShieldCheck, Sun } from "lucide-react";
+import { Building2, Gauge, LogOut, Moon, Plug, Rocket, ShieldCheck, Sun } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAppSelector } from "@/lib/store/hooks";
@@ -10,8 +10,7 @@ import { isFeatureOn } from "@/lib/store/slices/featuresSlice";
 import { OrgLogo } from "@/components/layout/org-logo";
 import { useTheme } from "@/hooks/useTheme";
 import { buildOrgRoute, pageRoutes, SITE_NAME } from "@/lib/constants";
-import { isNavParent, navGroups, visibleNavGroups, type NavParent } from "@/lib/navigation";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { navGroups, visibleNavGroups } from "@/lib/navigation";
 import { Switch } from "@/components/ui/switch";
 import {
   Sidebar,
@@ -24,16 +23,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
 
 export function AppSidebar() {
   const pathname = usePathname();
   const params = useParams<{ orgnization: string }>();
-  const { user, can, logout } = useAuth();
+  const { user, can, moduleOff, logout } = useAuth();
   // Known after the setup wizard loads; changes when an admin uploads a new logo.
   const logoVersion = useAppSelector((state) => state.onboarding.state?.values.logo.updated_at ?? null);
   const orgName = user?.organizationName || SITE_NAME;
@@ -65,34 +61,25 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
-        {visibleNavGroups(navGroups, can).map((group) => (
+        {visibleNavGroups(navGroups, can, moduleOff).map((group) => (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {group.items.map((item) =>
-                  isNavParent(item) ? (
-                    <AdsManagerNavItem
-                      key={item.label}
-                      item={item}
-                      buildHref={buildHref}
-                      isActive={isActive}
-                    />
-                  ) : (
-                    <SidebarMenuItem key={item.label}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive(buildHref(item.href))}
-                        tooltip={item.label}
-                      >
-                        <Link href={buildHref(item.href)}>
-                          <item.icon />
-                          <span>{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ),
-                )}
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(buildHref(item.href))}
+                      tooltip={item.label}
+                    >
+                      <Link href={buildHref(item.href)}>
+                        <item.icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -174,46 +161,5 @@ function ThemeToggle() {
         />
       </SidebarMenuButton>
     </SidebarMenuItem>
-  );
-}
-
-function AdsManagerNavItem({
-  item,
-  buildHref,
-  isActive,
-}: {
-  item: NavParent;
-  buildHref: (route: string) => string;
-  isActive: (href: string) => boolean;
-}) {
-  const hasActiveChild = item.children.some((child) => isActive(buildHref(child.href)));
-
-  return (
-    <Collapsible defaultOpen={hasActiveChild} className="group/collapsible">
-      <SidebarMenuItem>
-        <CollapsibleTrigger asChild>
-          <SidebarMenuButton isActive={hasActiveChild} tooltip={item.label}>
-            <item.icon />
-            <span>{item.label}</span>
-            <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-          </SidebarMenuButton>
-        </CollapsibleTrigger>
-        <CollapsibleContent>
-          <SidebarMenuSub>
-            {item.children.map((child) => {
-              const href = buildHref(child.href);
-
-              return (
-                <SidebarMenuSubItem key={child.label}>
-                  <SidebarMenuSubButton asChild isActive={isActive(href)}>
-                    <Link href={href}>{child.label}</Link>
-                  </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              );
-            })}
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </SidebarMenuItem>
-    </Collapsible>
   );
 }
