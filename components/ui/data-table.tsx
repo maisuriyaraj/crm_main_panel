@@ -27,7 +27,8 @@ import {
 // The page numbers to show: always the first and last, the current one and its
 // neighbours, with a gap marker standing in for the rest. Listing every page
 // instead overflows a narrow phone and makes the whole page scroll sideways.
-const pageWindow = (current: number, total: number): (number | "gap")[] => {
+// Shared with the server-driven list, which paints the same pager.
+export const pageWindow = (current: number, total: number): (number | "gap")[] => {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
 
   const pages = new Set<number>([1, total, current]);

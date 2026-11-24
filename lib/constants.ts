@@ -81,6 +81,10 @@ export const apiRoutes = {
     contacts: "/contacts",
     contactNotes: "/contacts/notes",
     contactsExport: "/contacts/export",
+    // The shared list contract: a member's column choices per list, and the saved
+    // views ("VIEW FILTER") of a list. Both take the list key — "leads", "contacts".
+    listPreferences: "/app/list-preferences",
+    savedViews: "/app/saved-views",
     features: "/features",
     storageUsage: "/storage/usage",
     usage: "/app/usage",

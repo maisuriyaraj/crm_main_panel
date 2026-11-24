@@ -2,11 +2,16 @@ import { Axios } from "@/lib/axios";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { apiRoutes } from "@/lib/constants";
 import { mapContactFromApi, mapContactNoteFromApi } from "@/lib/contacts/mappers";
-import type { Contact, ContactNote, ContactsPagination } from "@/lib/contacts/types";
+import type { Contact, ContactNote } from "@/lib/contacts/types";
+import { mapEmptyStateFromApi, mapPaginationFromApi, type ListEmptyState, type ListPagination } from "@/lib/lists/types";
 
 interface ContactsState {
   contacts: Contact[];
-  pagination: ContactsPagination | null;
+  pagination: ListPagination | null;
+  // Whether the organization has any contacts at all, filters aside, and what
+  // the API says an empty page should say and offer.
+  hasAnyWithoutFilters: boolean;
+  emptyState: ListEmptyState | null;
   isLoading: boolean;
   error: string | null;
 
@@ -17,6 +22,8 @@ interface ContactsState {
 const initialState: ContactsState = {
   contacts: [],
   pagination: null,
+  hasAnyWithoutFilters: true,
+  emptyState: null,
   isLoading: false,
   error: null,
 
@@ -48,7 +55,9 @@ export const reqToGetContacts = createAsyncThunk<
 
       return {
         contacts: (response.data?.data ?? []).map(mapContactFromApi),
-        pagination: response.data?.pagination ?? null,
+        pagination: mapPaginationFromApi(response.data?.pagination),
+        hasAnyWithoutFilters: response.data?.has_any_without_filters !== false,
+        emptyState: mapEmptyStateFromApi(response.data?.empty_state),
       };
     } catch (error: any) {
       onFailure?.(error);
@@ -313,6 +322,8 @@ const contactsSlice = createSlice({
         state.isLoading = false;
         state.contacts = action.payload.contacts;
         state.pagination = action.payload.pagination;
+        state.hasAnyWithoutFilters = action.payload.hasAnyWithoutFilters;
+        state.emptyState = action.payload.emptyState;
       })
       .addCase(reqToGetContacts.rejected, (state, action) => {
         state.isLoading = false;

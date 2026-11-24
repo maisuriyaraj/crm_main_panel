@@ -5,6 +5,7 @@ import authReducer, { sessionEnded } from "./slices/authSlice";
 import orgUsersReducer from "./slices/orgUsersSlice";
 import leadsReducer from "./slices/leadsSlice";
 import contactsReducer from "./slices/contactsSlice";
+import listViewsReducer from "./slices/listViewsSlice";
 import teamInvitationsReducer from "./slices/teamInvitationsSlice";
 import teamRolesReducer from "./slices/teamRolesSlice";
 import teamAuditReducer from "./slices/teamAuditSlice";
@@ -28,6 +29,7 @@ const appReducer = combineReducers({
   orgUsers: orgUsersReducer,
   leads: leadsReducer,
   contacts: contactsReducer,
+  listViews: listViewsReducer,
   teamInvitations: teamInvitationsReducer,
   teamRoles: teamRolesReducer,
   teamAudit: teamAuditReducer,

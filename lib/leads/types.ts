@@ -23,8 +23,11 @@ export interface LeadStage {
 export interface Lead {
   id: string;
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   email?: string;
   mobile?: string;
+  alternateMobile?: string;
   companyName?: string;
   designation?: string;
   website?: string;
@@ -32,6 +35,7 @@ export interface Lead {
   temperature: LeadTemperature;
   leadScore: number;
   value?: number;
+  expectedBudget?: number;
   probability?: number;
   description?: string;
   statusId: string;

@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Search, Trash2, Users } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { notify } from "@/lib/commonFunctions";
 
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreateFromUrl } from "@/hooks/useCreateFromUrl";
+import { useServerList } from "@/hooks/useServerList";
 import {
   reqToBulkDeleteContacts,
   reqToBulkUpdateContacts,
@@ -21,14 +22,15 @@ import {
 } from "@/lib/store/slices/contactsSlice";
 import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
 import { mapApiErrorsToForm, mapContactPayloadToApi } from "@/lib/contacts/mappers";
-import type { Contact, ContactListQuery } from "@/lib/contacts/types";
+import type { Contact } from "@/lib/contacts/types";
 import { resolveOwnerName } from "@/lib/contacts/types";
+import { isCountChanged, selectionCount } from "@/lib/lists/types";
+import { helpFor } from "@/lib/lists/help-text";
+import { exportSelectionParams } from "@/lib/exports";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -37,13 +39,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import {
   ContactFormDialog,
   type ContactFormServerError,
@@ -52,14 +57,19 @@ import {
 import { ContactDetailSheet } from "@/components/contacts/contact-detail-sheet";
 import { NoAccess } from "@/components/auth/no-access";
 import { ExportButton } from "@/components/shared/export-button";
+import { ServerList, type ServerListColumn } from "@/components/shared/server-list";
+import { SavedViewsBar } from "@/components/shared/saved-views-bar";
+import { Truncated } from "@/components/shared/field-help";
 import { apiRoutes } from "@/lib/constants";
 
-const PAGE_SIZE = 20;
+const LIST_KEY = "contacts";
 const ALL = "all";
 
 // Long enough that typing a name does not fire a request per keystroke, short
 // enough that the list still feels live.
 const SEARCH_DEBOUNCE_MS = 350;
+
+const dateCell = (value?: string) => (value ? new Date(value).toLocaleDateString("en-IN") : "—");
 
 export default function ContactsPage() {
   const { user, can } = useAuth();
@@ -79,11 +89,9 @@ function ContactsWorkspace() {
   const canExport = can("contacts.export");
   const canManageNotes = can("contacts.notes.manage");
   const canLookupMembers = can("members.lookup");
-  // Name + Company + Email + Mobile + Owner + Tags, plus the gated columns.
-  const columnCount = 6 + (canBulk ? 1 : 0) + (canDelete ? 1 : 0);
   const currentUserId = user?.id ? String(user.id) : undefined;
 
-  const { contacts, pagination, isLoading, activeContactNotes, notesLoading } = useAppSelector(
+  const { contacts, pagination, isLoading, hasAnyWithoutFilters, emptyState, activeContactNotes, notesLoading } = useAppSelector(
     (state) => state.contacts,
   );
   // Active teammates (names only), readable by every role.
@@ -95,29 +103,41 @@ function ContactsWorkspace() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [ownerFilter, setOwnerFilter] = useState(ALL);
-  const [page, setPage] = useState(1);
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailContact, setDetailContact] = useState<Contact | null>(null);
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [serverErrors, setServerErrors] = useState<ContactFormServerError[]>([]);
 
-  const hasActiveFilters = search.trim() !== "" || ownerFilter !== ALL;
+  // Every filter is sent to the API, the same as Leads: both lists now run on
+  // the shared list contract and answer the same pager shape.
+  const filters = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      assigned_to: ownerFilter !== ALL ? ownerFilter : undefined,
+    }),
+    [search, ownerFilter],
+  );
 
-  // Every filter is sent to the API. The Leads screen pulls 1000 rows and filters
-  // in the browser, which silently truncates past that; this does not.
-  const query = useMemo<ContactListQuery>(() => {
-    const next: ContactListQuery = { page, limit: PAGE_SIZE };
-    if (search.trim()) next.search = search.trim();
-    if (ownerFilter !== ALL) next.assigned_to = ownerFilter;
-    return next;
-  }, [page, search, ownerFilter]);
+  const hasFilters = search.trim() !== "" || ownerFilter !== ALL;
+
+  const applyFilters = useCallback((next: Record<string, string>) => {
+    setSearchInput(next.search ?? "");
+    setSearch(next.search ?? "");
+    setOwnerFilter(next.assigned_to ?? ALL);
+  }, []);
+
+  const list = useServerList({
+    listKey: LIST_KEY,
+    filters,
+    hasFilters,
+    onApplyFilters: applyFilters,
+  });
 
   const refreshContacts = useCallback(() => {
-    dispatch(reqToGetContacts({ data: query }));
-  }, [dispatch, query]);
+    dispatch(reqToGetContacts({ data: list.query }));
+  }, [dispatch, list.query]);
 
   useEffect(() => {
     refreshContacts();
@@ -130,9 +150,10 @@ function ContactsWorkspace() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput);
-      setPage(1);
+      list.resetPaging();
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
   useEffect(() => {
@@ -140,10 +161,14 @@ function ContactsWorkspace() {
     dispatch(reqToGetContactNotes({ data: { id: detailContact.id } }));
   }, [detailContact, dispatch]);
 
-  // Selection is page-scoped; clear it whenever the visible rows change.
-  useEffect(() => {
-    setSelectedIds(new Set());
-  }, [contacts]);
+  const total = pagination?.total ?? contacts.length;
+  const chosen = selectionCount(list.selection);
+  const allMatching = list.selection.mode === "all_matching";
+
+  const clearFilters = () => {
+    applyFilters({});
+    list.resetPaging();
+  };
 
   const openCreate = () => {
     setFormMode("create");
@@ -205,6 +230,7 @@ function ContactsWorkspace() {
         onSuccess: () => {
           notify("Contact deleted", { type: "success" });
           setDetailContact(null);
+          list.clearSelection();
           refreshContacts();
         },
         onFailure: (error: any) =>
@@ -213,35 +239,58 @@ function ContactsWorkspace() {
     );
   };
 
-  const handleBulkDelete = () => {
+  // The server re-counts "everything matching" under a lock before it acts. If
+  // the number moved, nothing was changed: reload so the member sees the real
+  // count, and let them decide whether to run it again.
+  const bulkFailed = (fallback: string) => (error: any) => {
+    if (isCountChanged(error)) {
+      refreshContacts();
+      list.clearSelection();
+      notify(
+        `${error?.response?.data?.message ?? "The list changed while you were working."} Nothing was changed — check the new count and try again.`,
+        { type: "error" },
+      );
+      return;
+    }
+    notify(error?.response?.data?.message ?? fallback, { type: "error" });
+  };
+
+  const runBulk = (
+    thunk: typeof reqToBulkUpdateContacts | typeof reqToBulkDeleteContacts,
+    extra: Record<string, unknown> | undefined,
+    done: (response: any) => string,
+    fallback: string,
+  ) => {
+    const payload = list.bulkPayload(extra);
+    if (!payload) return;
     dispatch(
-      reqToBulkDeleteContacts({
-        data: { ids: [...selectedIds] },
+      thunk({
+        data: payload,
         onSuccess: (response: any) => {
-          notify(`${response?.data?.deleted ?? 0} contacts deleted`, { type: "success" });
-          setSelectedIds(new Set());
+          notify(done(response), { type: "success" });
+          list.clearSelection();
           refreshContacts();
         },
-        onFailure: (error: any) =>
-          notify(error?.response?.data?.message ?? "Failed to delete contacts", { type: "error" }),
+        onFailure: bulkFailed(fallback),
       }),
     );
   };
 
-  const handleBulkAssign = (ownerId: string) => {
-    dispatch(
-      reqToBulkUpdateContacts({
-        data: { ids: [...selectedIds], data: { assigned_to: ownerId === ALL ? null : ownerId } },
-        onSuccess: (response: any) => {
-          notify(`${response?.data?.updated ?? 0} contacts updated`, { type: "success" });
-          setSelectedIds(new Set());
-          refreshContacts();
-        },
-        onFailure: (error: any) =>
-          notify(error?.response?.data?.message ?? "Failed to update contacts", { type: "error" }),
-      }),
+  const handleBulkDelete = () =>
+    runBulk(
+      reqToBulkDeleteContacts,
+      undefined,
+      (response) => `${response?.data?.deleted ?? 0} contacts deleted`,
+      "Failed to delete contacts",
     );
-  };
+
+  const handleBulkAssign = (ownerId: string) =>
+    runBulk(
+      reqToBulkUpdateContacts,
+      { data: { assigned_to: ownerId === ALL ? null : ownerId } },
+      (response) => `${response?.data?.updated ?? 0} contacts updated`,
+      "Failed to update contacts",
+    );
 
   const noteAction = (thunk: any, data: any, successMessage: string) => {
     dispatch(
@@ -259,29 +308,119 @@ function ContactsWorkspace() {
     );
   };
 
-  const toggleRow = (id: string) => {
-    setSelectedIds((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
+  // The API serves this copy with the column choices; the local map is the
+  // fallback for the first render, before the preferences come back.
+  const help = (key: string) => list.fieldHelp[key] ?? helpFor(LIST_KEY, key);
 
-  const toggleAll = () => {
-    setSelectedIds((previous) =>
-      previous.size === contacts.length ? new Set() : new Set(contacts.map((c) => c.id)),
-    );
-  };
+  // Keys match the API's own column catalog, so a stored column choice and a
+  // saved view mean the same thing on both sides.
+  const columns: ServerListColumn<Contact>[] = [
+    {
+      key: "full_name",
+      header: "Name",
+      sortBy: "full_name",
+      render: (row) => <Truncated value={row.fullName} className="font-medium" />,
+    },
+    {
+      key: "company_name",
+      header: "Company",
+      sortBy: "company_name",
+      render: (row) => <Truncated value={row.companyName} />,
+    },
+    { key: "email", header: "Email", render: (row) => <Truncated value={row.email} /> },
+    { key: "mobile", header: "Mobile", render: (row) => row.mobile ?? "—" },
+    {
+      key: "assignee",
+      header: "Owner",
+      help: help("assignee"),
+      render: (row) =>
+        row.assignedTo ? (
+          <Truncated value={resolveOwnerName(owners, row.assignedTo)} width="max-w-40" />
+        ) : (
+          <span className="text-muted-foreground">Unassigned</span>
+        ),
+    },
+    {
+      key: "tags",
+      header: "Tags",
+      help: help("tags"),
+      render: (row) => (
+        <div className="flex flex-wrap gap-1">
+          {row.tags.slice(0, 2).map((tag) => (
+            <Badge key={tag} variant="secondary">
+              {tag}
+            </Badge>
+          ))}
+          {row.tags.length > 2 && <Badge variant="outline">+{row.tags.length - 2}</Badge>}
+        </div>
+      ),
+    },
+    { key: "first_name", header: "First name", render: (row) => <Truncated value={row.firstName} /> },
+    { key: "last_name", header: "Last name", render: (row) => <Truncated value={row.lastName} /> },
+    {
+      key: "alternate_mobile",
+      header: "Alternate mobile",
+      help: help("alternate_mobile"),
+      render: (row) => row.alternateMobile ?? "—",
+    },
+    {
+      key: "designation",
+      header: "Designation",
+      help: help("designation"),
+      render: (row) => <Truncated value={row.designation} />,
+    },
+    { key: "website", header: "Website", render: (row) => <Truncated value={row.website} /> },
+    {
+      key: "source_lead_id",
+      header: "From lead",
+      help: help("source_lead_id"),
+      render: (row) => (row.sourceLeadId ? `Lead #${row.sourceLeadId}` : "—"),
+    },
+    { key: "description", header: "Notes", render: (row) => <Truncated value={row.description} /> },
+    { key: "created_at", header: "Created", sortBy: "created_at", render: (row) => dateCell(row.createdAt) },
+    { key: "updated_at", header: "Updated", sortBy: "updated_at", render: (row) => dateCell(row.updatedAt) },
+  ];
 
-  const clearFilters = () => {
-    setSearchInput("");
-    setSearch("");
-    setOwnerFilter(ALL);
-    setPage(1);
-  };
+  const leading: ServerListColumn<Contact>[] = canBulk
+    ? [{ key: "select", header: "", render: () => null }]
+    : [];
 
-  const totalPages = pagination?.totalPages ?? 1;
+  const trailing: ServerListColumn<Contact>[] = canDelete
+    ? [
+        {
+          key: "actions",
+          header: "",
+          className: "w-10 text-right",
+          render: (row) => (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label={`Delete ${row.fullName}`}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {row.fullName}?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    The contact is removed from your list. Invoices already raised for them are kept.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleDelete(row)}>Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ),
+        },
+      ]
+    : [];
+
+  const exportParams = { ...list.filters, ...exportSelectionParams(list.selection) };
+  const exportScope =
+    list.selection.mode === "ids"
+      ? `The ${list.selection.ids.length} selected contact(s)`
+      : `All ${total.toLocaleString("en-IN")} contact(s) matching your filters`;
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -289,15 +428,16 @@ function ContactsWorkspace() {
         <div>
           <h1 className="text-2xl font-semibold">Contacts</h1>
           <p className="text-sm text-muted-foreground">
-            {pagination ? `${pagination.total} total` : " "}
+            {pagination ? `${pagination.total.toLocaleString("en-IN")} total` : " "}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canExport && (
             <ExportButton
               path={apiRoutes.contactsExport}
-              params={{ search: search.trim() || undefined, assigned_to: ownerFilter !== ALL ? ownerFilter : undefined }}
-              fileName="contacts.csv"
+              params={exportParams}
+              fileName="contacts"
+              scopeLabel={exportScope}
             />
           )}
           {canCreate && (
@@ -308,6 +448,13 @@ function ContactsWorkspace() {
           )}
         </div>
       </div>
+
+      <SavedViewsBar
+        listKey={LIST_KEY}
+        activeViewId={list.activeViewId}
+        onApply={list.applyView}
+        current={{ filters, sort: list.sort, columns: list.columns, viewMode: "table" }}
+      />
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[220px] flex-1">
@@ -324,7 +471,7 @@ function ContactsWorkspace() {
           value={ownerFilter}
           onValueChange={(value) => {
             setOwnerFilter(value);
-            setPage(1);
+            list.resetPaging();
           }}
         >
           <SelectTrigger className="w-[190px]">
@@ -340,16 +487,18 @@ function ContactsWorkspace() {
           </SelectContent>
         </Select>
 
-        {hasActiveFilters && (
+        {hasFilters && (
           <Button variant="ghost" onClick={clearFilters}>
             Clear filters
           </Button>
         )}
       </div>
 
-      {selectedIds.size > 0 && canBulk && (
+      {chosen > 0 && canBulk && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 p-2">
-          <span className="text-sm">{selectedIds.size} selected</span>
+          <span className="text-sm">
+            {allMatching ? `All ${chosen.toLocaleString("en-IN")} matching contacts` : `${chosen} selected`}
+          </span>
           <Select onValueChange={handleBulkAssign}>
             <SelectTrigger className="w-[190px]">
               <SelectValue placeholder="Reassign to..." />
@@ -363,151 +512,63 @@ function ContactsWorkspace() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="destructive" size="sm" onClick={handleBulkDelete}>
-            <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Delete
-          </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="mr-2 h-3.5 w-3.5" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {allMatching ? `all ${chosen.toLocaleString("en-IN")} matching` : chosen} contact(s)?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {allMatching
+                    ? "This deletes every contact matching your current filters, including those on other pages."
+                    : "The contacts are removed from your list."}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleBulkDelete}>Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {canBulk && (
-                <TableHead className="w-10">
-                  <Checkbox
-                    checked={contacts.length > 0 && selectedIds.size === contacts.length}
-                    onCheckedChange={toggleAll}
-                    aria-label="Select all"
-                  />
-                </TableHead>
-              )}
-              <TableHead>Name</TableHead>
-              <TableHead>Company</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Mobile</TableHead>
-              <TableHead>Owner</TableHead>
-              <TableHead>Tags</TableHead>
-              {canDelete && <TableHead className="w-10" />}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, index) => (
-                <TableRow key={index}>
-                  <TableCell colSpan={columnCount}>
-                    <Skeleton className="h-6 w-full" />
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : contacts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columnCount} className="py-12 text-center">
-                  <Users className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-                  {hasActiveFilters ? (
-                    <>
-                      <p className="text-sm">No contacts match these filters.</p>
-                      <Button variant="link" onClick={clearFilters}>
-                        Clear filters
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm">No contacts yet.</p>
-                      {canCreate && (
-                        <Button variant="link" onClick={openCreate}>
-                          Add your first contact
-                        </Button>
-                      )}
-                    </>
-                  )}
-                </TableCell>
-              </TableRow>
-            ) : (
-              contacts.map((contact) => (
-                <TableRow
-                  key={contact.id}
-                  className="cursor-pointer"
-                  onClick={() => setDetailContact(contact)}
-                >
-                  {canBulk && (
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedIds.has(contact.id)}
-                        onCheckedChange={() => toggleRow(contact.id)}
-                        aria-label={`Select ${contact.fullName}`}
-                      />
-                    </TableCell>
-                  )}
-                  <TableCell className="font-medium">{contact.fullName}</TableCell>
-                  <TableCell>{contact.companyName ?? "—"}</TableCell>
-                  <TableCell>{contact.email ?? "—"}</TableCell>
-                  <TableCell>{contact.mobile ?? "—"}</TableCell>
-                  <TableCell>
-                    {contact.assignedTo ? (
-                      resolveOwnerName(owners, contact.assignedTo)
-                    ) : (
-                      <span className="text-muted-foreground">Unassigned</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {contact.tags.slice(0, 2).map((tag) => (
-                        <Badge key={tag} variant="secondary">
-                          {tag}
-                        </Badge>
-                      ))}
-                      {contact.tags.length > 2 && (
-                        <Badge variant="outline">+{contact.tags.length - 2}</Badge>
-                      )}
-                    </div>
-                  </TableCell>
-                  {canDelete && (
-                    <TableCell onClick={(event) => event.stopPropagation()}>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8"
-                        onClick={() => handleDelete(contact)}
-                        aria-label={`Delete ${contact.fullName}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Page {pagination?.page ?? page} of {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      )}
+      <ServerList<Contact>
+        rows={contacts}
+        getRowId={(row) => row.id}
+        leading={leading}
+        columns={columns}
+        trailing={trailing}
+        isLoading={isLoading}
+        pagination={pagination}
+        page={list.page}
+        perPage={list.perPage}
+        onPageChange={list.setPage}
+        onPerPageChange={list.setPerPage}
+        sort={list.sort}
+        onSortChange={list.setSort}
+        columnChoices={list.columns}
+        columnHelp={list.fieldHelp}
+        onColumnsChange={list.saveColumns}
+        onColumnsReset={list.resetColumns}
+        selection={canBulk ? list.selection : undefined}
+        onSelectionChange={canBulk ? list.setSelection : undefined}
+        emptyState={emptyState}
+        noun={list.nouns?.one ?? "contact"}
+        nounPlural={list.nouns?.many ?? "contacts"}
+        hasFilters={hasFilters}
+        hasAnyWithoutFilters={hasAnyWithoutFilters}
+        onClearFilters={clearFilters}
+        createAction={canCreate ? { label: "New Contact", onClick: openCreate } : undefined}
+        onRowClick={(row) => setDetailContact(row)}
+      />
 
       <ContactFormDialog
         mode={formMode}

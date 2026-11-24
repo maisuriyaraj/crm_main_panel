@@ -33,6 +33,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TagInput } from "@/components/leads/tag-input";
+import { FieldHelp } from "@/components/shared/field-help";
+import { useFieldHelp } from "@/hooks/useFieldHelp";
 
 const leadFormSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
@@ -111,6 +113,8 @@ export function LeadFormDialog({
   onOpenChange,
   onSubmit,
 }: LeadFormDialogProps) {
+  // The same ⓘ copy the Leads table shows, served by the API.
+  const fieldHelp = useFieldHelp("leads");
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = onOpenChange ?? setUncontrolledOpen;
@@ -231,7 +235,10 @@ export function LeadFormDialog({
                 name="statusId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Stage</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Stage
+                      <FieldHelp text={fieldHelp("stage")} />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -256,7 +263,10 @@ export function LeadFormDialog({
                 name="assignedTo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Owner</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Owner
+                      <FieldHelp text={fieldHelp("assignee")} />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -281,7 +291,10 @@ export function LeadFormDialog({
                 name="priority"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Priority</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Priority
+                      <FieldHelp text={fieldHelp("priority")} />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -306,7 +319,10 @@ export function LeadFormDialog({
                 name="temperature"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Temperature</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Temperature
+                      <FieldHelp text={fieldHelp("temperature")} />
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -331,7 +347,10 @@ export function LeadFormDialog({
                 name="value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Deal Value</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Deal Value
+                      <FieldHelp text={fieldHelp("value")} />
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" min={0} placeholder="0" {...field} value={field.value ?? ""} />
                     </FormControl>
@@ -345,7 +364,10 @@ export function LeadFormDialog({
                 name="probability"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Probability (%)</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Probability (%)
+                      <FieldHelp text={fieldHelp("probability")} />
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" min={0} max={100} placeholder="0" {...field} value={field.value ?? ""} />
                     </FormControl>
@@ -359,7 +381,10 @@ export function LeadFormDialog({
                 name="leadScore"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Lead Score</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Lead Score
+                      <FieldHelp text={fieldHelp("lead_score")} />
+                    </FormLabel>
                     <FormControl>
                       <Input type="number" min={0} max={100} placeholder="0" {...field} value={field.value ?? ""} />
                     </FormControl>
@@ -374,7 +399,10 @@ export function LeadFormDialog({
               name="tags"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tags</FormLabel>
+                  <FormLabel className="flex items-center gap-1">
+                      Tags
+                      <FieldHelp text={fieldHelp("tags")} />
+                    </FormLabel>
                   <FormControl>
                     <TagInput value={field.value} onChange={field.onChange} />
                   </FormControl>

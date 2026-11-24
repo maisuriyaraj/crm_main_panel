@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import type { Contact, ContactOwner } from "@/lib/contacts/types";
+import { FieldHelp } from "@/components/shared/field-help";
+import { useFieldHelp } from "@/hooks/useFieldHelp";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -114,6 +116,8 @@ export function ContactFormDialog({
   onSubmit,
   serverErrors,
 }: ContactFormDialogProps) {
+  // The same ⓘ copy the Contacts table shows, served by the API.
+  const fieldHelp = useFieldHelp("contacts");
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const open = controlledOpen ?? uncontrolledOpen;
@@ -234,7 +238,10 @@ export function ContactFormDialog({
                 name="alternateMobile"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Alternate Mobile</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Alternate Mobile
+                      <FieldHelp text={fieldHelp("alternate_mobile")} />
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="Optional" {...field} />
                     </FormControl>
@@ -262,7 +269,10 @@ export function ContactFormDialog({
                 name="designation"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Designation</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Designation
+                      <FieldHelp text={fieldHelp("designation")} />
+                    </FormLabel>
                     <FormControl>
                       <Input placeholder="VP Sales" {...field} />
                     </FormControl>
@@ -290,7 +300,10 @@ export function ContactFormDialog({
                 name="assignedTo"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Owner</FormLabel>
+                    <FormLabel className="flex items-center gap-1">
+                      Owner
+                      <FieldHelp text={fieldHelp("assignee")} />
+                    </FormLabel>
                     <Select
                       value={field.value ? field.value : UNASSIGNED}
                       onValueChange={(value) => field.onChange(value === UNASSIGNED ? "" : value)}

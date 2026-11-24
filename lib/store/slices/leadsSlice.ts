@@ -8,17 +8,15 @@ import {
   mapLeadStatusFromApi,
 } from "@/lib/leads/mappers";
 import type { Lead, LeadActivity, LeadNote, LeadStage } from "@/lib/leads/types";
-
-interface LeadsPagination {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
+import { mapEmptyStateFromApi, mapPaginationFromApi, type ListEmptyState, type ListPagination } from "@/lib/lists/types";
 
 interface LeadsState {
   leads: Lead[];
-  pagination: LeadsPagination | null;
+  pagination: ListPagination | null;
+  // Whether the organization has any leads at all, filters aside, and what the
+  // API says an empty page should say and offer.
+  hasAnyWithoutFilters: boolean;
+  emptyState: ListEmptyState | null;
   isLoading: boolean;
   error: string | null;
 
@@ -36,6 +34,8 @@ interface LeadsState {
 const initialState: LeadsState = {
   leads: [],
   pagination: null,
+  hasAnyWithoutFilters: true,
+  emptyState: null,
   isLoading: false,
   error: null,
 
@@ -66,7 +66,9 @@ export const reqToGetLeads = createAsyncThunk<
 
       return {
         leads: (response.data?.data ?? []).map(mapLeadFromApi),
-        pagination: response.data?.pagination ?? null,
+        pagination: mapPaginationFromApi(response.data?.pagination),
+        hasAnyWithoutFilters: response.data?.has_any_without_filters !== false,
+        emptyState: mapEmptyStateFromApi(response.data?.empty_state),
       };
     } catch (error: any) {
       onFailure?.(error);
@@ -501,6 +503,8 @@ const leadsSlice = createSlice({
       state.error = null;
       state.leads = action.payload.leads;
       state.pagination = action.payload.pagination;
+      state.hasAnyWithoutFilters = action.payload.hasAnyWithoutFilters;
+      state.emptyState = action.payload.emptyState;
     });
     builder.addCase(reqToGetLeads.rejected, (state, action) => {
       state.isLoading = false;

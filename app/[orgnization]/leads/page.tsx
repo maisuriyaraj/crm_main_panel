@@ -8,6 +8,7 @@ import { notify } from "@/lib/commonFunctions";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreateFromUrl } from "@/hooks/useCreateFromUrl";
+import { useServerList } from "@/hooks/useServerList";
 import {
   reqToAddLeadActivity,
   reqToBulkDeleteLeads,
@@ -30,11 +31,12 @@ import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
 import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
 import { resolveOwnerName, type Lead, type LeadActivityType } from "@/lib/leads/types";
 import { FALLBACK_LEAD_STATUSES } from "@/lib/leads/fallback-data";
+import { isCountChanged, selectionCount } from "@/lib/lists/types";
+import { helpFor } from "@/lib/lists/help-text";
+import { exportSelectionParams } from "@/lib/exports";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import {
   Select,
   SelectContent,
@@ -61,6 +63,9 @@ import { LeadAnalytics } from "@/components/leads/lead-analytics";
 import { NoAccess } from "@/components/auth/no-access";
 import { apiErrorMessage } from "@/lib/auth/errors";
 import { ExportButton } from "@/components/shared/export-button";
+import { ServerList, type ServerListColumn } from "@/components/shared/server-list";
+import { SavedViewsBar } from "@/components/shared/saved-views-bar";
+import { Truncated } from "@/components/shared/field-help";
 import { apiRoutes } from "@/lib/constants";
 import { HeldLeadsNotice } from "@/components/usage/held-leads-notice";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -70,6 +75,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 type ViewMode = "list" | "kanban" | "analytics";
 
+const LIST_KEY = "leads";
+
 const PRIORITY_VARIANT: Record<Lead["priority"], "default" | "secondary" | "outline" | "destructive"> = {
   low: "outline",
   medium: "secondary",
@@ -78,20 +85,13 @@ const PRIORITY_VARIANT: Record<Lead["priority"], "default" | "secondary" | "outl
 };
 
 // The API filters, sorts and pages, and only ever returns leads inside the
-// member's record scope. The list asks for one page; the board and analytics
-// need every stage at once, so they ask for up to the API's maximum.
-const LIST_PAGE_SIZE = 25;
-const BOARD_FETCH_LIMIT = 1000;
+// member's record scope. The list asks for one page of the size the member
+// chose. The board and analytics need several stages at once, so they ask for
+// the largest page the shared contract allows and say so when there are more.
+const BOARD_PAGE_SIZE = 100;
 const SEARCH_DEBOUNCE_MS = 350;
 
-// List columns the API can sort by, and its field names.
-const SORT_FIELDS: Record<string, string> = {
-  fullName: "full_name",
-  priority: "priority",
-  temperature: "temperature",
-  leadScore: "lead_score",
-  value: "value",
-};
+const ALL = "all";
 
 // "Self / My team / All": the widest choice the member's scope allows comes first.
 type OwnershipFilter = "self" | "team" | "all";
@@ -101,6 +101,8 @@ const ownershipChoices = (scope: "own" | "team" | "all" | undefined, hasTeam: bo
   if (scope === "team" && hasTeam) return ["team", "self"];
   return ["self"];
 };
+
+const dateCell = (value?: string) => (value ? new Date(value).toLocaleDateString("en-IN") : "—");
 
 export default function LeadsPage() {
   const { user, can } = useAuth();
@@ -129,7 +131,8 @@ function LeadsWorkspace() {
   const { summary: usage, refresh: refreshUsage } = useUsage();
   const atLeadLimit = leadsFull(usage);
 
-  const { leads, isLoading } = useAppSelector((state) => state.leads);
+  const { leads, isLoading, hasAnyWithoutFilters, emptyState } = useAppSelector((state) => state.leads);
+  const pagination = useAppSelector((state) => state.leads.pagination);
   const apiStatuses = useAppSelector((state) => state.leads.statuses);
   const activities = useAppSelector((state) => state.leads.activeLeadActivities);
   const notes = useAppSelector((state) => state.leads.activeLeadNotes);
@@ -148,41 +151,85 @@ function LeadsWorkspace() {
   const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilter>(ownership[0]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [sort, setSort] = useState<{ key: string; dir: "asc" | "desc" }>({ key: "", dir: "desc" });
-  const [stageFilter, setStageFilter] = useState("all");
-  const [ownerFilter, setOwnerFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [temperatureFilter, setTemperatureFilter] = useState("all");
+  const [stageFilter, setStageFilter] = useState(ALL);
+  const [ownerFilter, setOwnerFilter] = useState(ALL);
+  const [priorityFilter, setPriorityFilter] = useState(ALL);
+  const [temperatureFilter, setTemperatureFilter] = useState(ALL);
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
 
-  const setView = (next: ViewMode) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("view", next);
-    router.replace(`${pathname}?${params.toString()}`);
+  const setView = useCallback(
+    (next: ViewMode) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("view", next);
+      router.replace(`${pathname}?${params.toString()}`);
+    },
+    [pathname, router, searchParams],
+  );
+
+  // The same filters go to the list, the board, the export and any bulk action
+  // over "everything matching". Placeholder stages (an org with no pipeline yet)
+  // have no real id, so they are left out.
+  const filters = useMemo(
+    () => ({
+      search: search.trim() || undefined,
+      status_id: stageFilter !== ALL && /^\d+$/.test(stageFilter) ? stageFilter : undefined,
+      assigned_to: ownerFilter !== ALL ? ownerFilter : undefined,
+      priority: priorityFilter !== ALL ? priorityFilter : undefined,
+      temperature: temperatureFilter !== ALL ? temperatureFilter : undefined,
+      owner: ownershipFilter,
+    }),
+    [search, stageFilter, ownerFilter, priorityFilter, temperatureFilter, ownershipFilter],
+  );
+
+  // The ownership picker counts as a filter only when the member has narrowed it
+  // past the widest choice their role allows.
+  const hasFilters =
+    search.trim() !== "" ||
+    stageFilter !== ALL ||
+    ownerFilter !== ALL ||
+    priorityFilter !== ALL ||
+    temperatureFilter !== ALL ||
+    ownershipFilter !== ownership[0];
+
+  // A saved view carries the filter values the API itself speaks, so applying
+  // one is a matter of putting them back into these controls.
+  const applyFilters = useCallback(
+    (next: Record<string, string>) => {
+      setSearchInput(next.search ?? "");
+      setSearch(next.search ?? "");
+      setStageFilter(next.status_id ?? ALL);
+      setOwnerFilter(next.assigned_to ?? ALL);
+      setPriorityFilter(next.priority ?? ALL);
+      setTemperatureFilter(next.temperature ?? ALL);
+      setOwnershipFilter((next.owner as OwnershipFilter) ?? ownership[0]);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ownership[0]],
+  );
+
+  const list = useServerList({
+    listKey: LIST_KEY,
+    filters,
+    hasFilters,
+    onApplyFilters: applyFilters,
+    onApplyViewMode: (mode) => setView(mode === "kanban" ? "kanban" : "list"),
+  });
+
+  const clearFilters = () => {
+    applyFilters({});
+    list.resetPaging();
   };
 
-  // The same filters go to the list, the board and the export. Placeholder stages
-  // (an org with no pipeline yet) have no real id, so they are left out.
-  const filterParams = useMemo(() => ({
-    search: search.trim() || undefined,
-    status_id: stageFilter !== "all" && /^\d+$/.test(stageFilter) ? stageFilter : undefined,
-    assigned_to: ownerFilter !== "all" ? ownerFilter : undefined,
-    priority: priorityFilter !== "all" ? priorityFilter : undefined,
-    temperature: temperatureFilter !== "all" ? temperatureFilter : undefined,
-    owner: ownershipFilter,
-    sort_by: sort.key && SORT_FIELDS[sort.key] ? SORT_FIELDS[sort.key] : undefined,
-    sort_dir: sort.key ? sort.dir.toUpperCase() : undefined,
-  }), [search, stageFilter, ownerFilter, priorityFilter, temperatureFilter, ownershipFilter, sort]);
-
+  // The board and analytics read the largest page the contract allows rather
+  // than every row: the old screen asked for 1000 at once, which the API now
+  // refuses outright.
   const query = useMemo(
-    () => (view === "list" ? { ...filterParams, page, limit: LIST_PAGE_SIZE } : { ...filterParams, page: 1, limit: BOARD_FETCH_LIMIT }),
-    [filterParams, view, page],
+    () => (view === "list" ? list.query : { ...list.filters, page: 1, per_page: BOARD_PAGE_SIZE }),
+    [view, list.query, list.filters],
   );
 
   const refreshLeads = useCallback(() => {
@@ -196,17 +243,17 @@ function LeadsWorkspace() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearch(searchInput);
-      setPage(1);
+      list.resetPaging();
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchInput]);
 
   // Any filter change starts again at page 1, and drops a selection that may
   // no longer be on screen.
   const changeFilter = <T,>(setter: (value: T) => void) => (value: T) => {
     setter(value);
-    setPage(1);
-    setSelectedIds(new Set());
+    list.resetPaging();
   };
 
   useEffect(() => {
@@ -222,10 +269,9 @@ function LeadsWorkspace() {
     dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
   }, [detailLeadId, dispatch]);
 
-  // The server already filtered and scoped these.
-  const filteredLeads = leads;
-  const exportParams = filterParams;
-  const total = useAppSelector((state) => state.leads.pagination?.total ?? leads.length);
+  const total = pagination?.total ?? leads.length;
+  const chosen = selectionCount(list.selection);
+  const allMatching = list.selection.mode === "all_matching";
 
   // Pickers offer only people the member may assign to (own scope: themself;
   // team scope: their team). Editing keeps the lead's current owner listed so
@@ -236,6 +282,22 @@ function LeadsWorkspace() {
       ? [...assignableOwners, ...owners.filter((owner) => owner.id === editLead.assignedTo)]
       : assignableOwners;
   const failed = (fallback: string) => (error: unknown) => notify(apiErrorMessage(error, fallback), { type: "error" });
+
+  // The server re-counts "everything matching" under a lock before it acts. If
+  // the number moved, nothing was changed: reload so the member sees the real
+  // count, and let them decide whether to run it again.
+  const bulkFailed = (fallback: string) => (error: unknown) => {
+    if (isCountChanged(error)) {
+      refreshLeads();
+      list.clearSelection();
+      notify(
+        `${apiErrorMessage(error, "The list changed while you were working.")} Nothing was changed — check the new count and try again.`,
+        { type: "error" },
+      );
+      return;
+    }
+    failed(fallback)(error);
+  };
 
   const openCreate = () => {
     setFormMode("create");
@@ -318,11 +380,7 @@ function LeadsWorkspace() {
         data: { id },
         onSuccess: () => {
           notify("Lead deleted.", { type: "success" });
-          setSelectedIds((prev) => {
-            const next = new Set(prev);
-            next.delete(id);
-            return next;
-          });
+          list.clearSelection();
           refreshLeads();
         },
         onFailure: failed("Couldn't delete lead. Please try again."),
@@ -330,47 +388,37 @@ function LeadsWorkspace() {
     );
   };
 
-  const handleBulkDelete = () => {
+  // Every bulk action sends either the ticked ids or "everything matching these
+  // filters" with the count the member was shown.
+  const runBulk = (
+    thunk: typeof reqToBulkUpdateLeads | typeof reqToBulkDeleteLeads,
+    extra: Record<string, unknown> | undefined,
+    done: string,
+    fallback: string,
+  ) => {
+    const payload = list.bulkPayload(extra);
+    if (!payload) return;
     dispatch(
-      reqToBulkDeleteLeads({
-        data: { ids: Array.from(selectedIds) },
+      thunk({
+        data: payload,
         onSuccess: () => {
-          notify(`${selectedIds.size} lead(s) deleted.`, { type: "success" });
-          setSelectedIds(new Set());
+          notify(done, { type: "success" });
+          list.clearSelection();
           refreshLeads();
         },
-        onFailure: failed("Couldn't delete leads. Please try again."),
+        onFailure: bulkFailed(fallback),
       }),
     );
   };
 
-  const handleBulkStageChange = (stageId: string) => {
-    dispatch(
-      reqToBulkUpdateLeads({
-        data: { ids: Array.from(selectedIds), data: { status_id: stageId } },
-        onSuccess: () => {
-          notify(`Moved ${selectedIds.size} lead(s).`, { type: "success" });
-          setSelectedIds(new Set());
-          refreshLeads();
-        },
-        onFailure: failed("Couldn't move leads. Please try again."),
-      }),
-    );
-  };
+  const handleBulkDelete = () =>
+    runBulk(reqToBulkDeleteLeads, undefined, `${chosen} lead(s) deleted.`, "Couldn't delete leads. Please try again.");
 
-  const handleBulkAssign = (ownerId: string) => {
-    dispatch(
-      reqToBulkUpdateLeads({
-        data: { ids: Array.from(selectedIds), data: { assigned_to: ownerId } },
-        onSuccess: () => {
-          notify(`Reassigned ${selectedIds.size} lead(s).`, { type: "success" });
-          setSelectedIds(new Set());
-          refreshLeads();
-        },
-        onFailure: failed("Couldn't reassign leads. Please try again."),
-      }),
-    );
-  };
+  const handleBulkStageChange = (stageId: string) =>
+    runBulk(reqToBulkUpdateLeads, { data: { status_id: stageId } }, `Moved ${chosen} lead(s).`, "Couldn't move leads. Please try again.");
+
+  const handleBulkAssign = (ownerId: string) =>
+    runBulk(reqToBulkUpdateLeads, { data: { assigned_to: ownerId } }, `Reassigned ${chosen} lead(s).`, "Couldn't reassign leads. Please try again.");
 
   const handleMoveLead = (leadId: string, newStatusId: string) => {
     dispatch(
@@ -454,69 +502,59 @@ function LeadsWorkspace() {
     );
   };
 
-  const allColumns: DataTableColumn<Lead>[] = [
+  // The API serves this copy with the column choices; the local map is the
+  // fallback for the first render, before the preferences come back.
+  const help = (key: string) => list.fieldHelp[key] ?? helpFor(LIST_KEY, key);
+
+  // Keys match the API's own column catalog, so a stored column choice and a
+  // saved view mean the same thing on both sides.
+  const columns: ServerListColumn<Lead>[] = [
     {
-      key: "select",
-      header: (
-        <Checkbox
-          checked={filteredLeads.length > 0 && selectedIds.size === filteredLeads.length}
-          onCheckedChange={(checked) =>
-            setSelectedIds(checked ? new Set(filteredLeads.map((l) => l.id)) : new Set())
-          }
-          aria-label={`Select all ${filteredLeads.length} leads on this page`}
-          title={`Selects the ${filteredLeads.length} leads on this page`}
-        />
-      ),
-      render: (row) => (
-        <Checkbox
-          checked={selectedIds.has(row.id)}
-          onCheckedChange={(checked) =>
-            setSelectedIds((prev) => {
-              const next = new Set(prev);
-              if (checked) next.add(row.id);
-              else next.delete(row.id);
-              return next;
-            })
-          }
-          aria-label={`Select ${row.fullName}`}
-        />
-      ),
-    },
-    {
-      key: "fullName",
+      key: "full_name",
       header: "Name",
-      sortable: true,
+      label: "Name",
+      sortBy: "full_name",
       render: (row) => (
         <button type="button" className="text-left hover:underline" onClick={() => setDetailLeadId(row.id)}>
-          <div className="font-medium">{row.fullName}</div>
-          {row.companyName && <div className="text-xs text-muted-foreground">{row.companyName}</div>}
+          <Truncated value={row.fullName} className="font-medium" />
+          {row.companyName && <Truncated value={row.companyName} className="text-xs text-muted-foreground" />}
         </button>
       ),
     },
+    { key: "company_name", header: "Company", render: (row) => <Truncated value={row.companyName} /> },
+    { key: "email", header: "Email", render: (row) => <Truncated value={row.email} /> },
+    { key: "mobile", header: "Mobile", render: (row) => row.mobile ?? "—" },
     {
-      key: "statusId",
+      key: "stage",
       header: "Stage",
-      accessor: (row) => statuses.find((s) => s.id === row.statusId)?.name ?? "",
+      help: help("stage"),
       render: (row) => {
-        const stage = statuses.find((s) => s.id === row.statusId);
+        const stage = statuses.find((candidate) => candidate.id === row.statusId);
         return stage ? (
           <Badge variant="outline" style={{ borderColor: stage.color, color: stage.color }}>
             {stage.name}
           </Badge>
-        ) : null;
+        ) : (
+          "—"
+        );
       },
     },
     {
-      key: "assignedTo",
+      key: "assignee",
       header: "Owner",
-      accessor: (row) => (row.assignedTo ? resolveOwnerName(owners, row.assignedTo) : ""),
+      help: help("assignee"),
       render: (row) =>
-        row.assignedTo ? resolveOwnerName(owners, row.assignedTo) : <span className="text-muted-foreground">Unassigned</span>,
+        row.assignedTo ? (
+          <Truncated value={resolveOwnerName(owners, row.assignedTo)} width="max-w-40" />
+        ) : (
+          <span className="text-muted-foreground">Unassigned</span>
+        ),
     },
     {
       key: "priority",
       header: "Priority",
-      sortable: true,
+      sortBy: "priority",
+      help: help("priority"),
       render: (row) => (
         <Badge variant={PRIORITY_VARIANT[row.priority]} className="capitalize">
           {row.priority}
@@ -526,24 +564,39 @@ function LeadsWorkspace() {
     {
       key: "temperature",
       header: "Temperature",
-      sortable: true,
+      sortBy: "temperature",
+      help: help("temperature"),
       render: (row) => (
         <Badge variant="secondary" className="capitalize">
           {row.temperature}
         </Badge>
       ),
     },
-    { key: "leadScore", header: "Score", sortable: true },
+    { key: "lead_score", header: "Score", sortBy: "lead_score", help: help("lead_score"), render: (row) => row.leadScore },
     {
       key: "value",
       header: "Value",
-      sortable: true,
-      accessor: (row) => row.value ?? 0,
+      sortBy: "value",
+      help: help("value"),
       render: (row) => (typeof row.value === "number" ? `₹${row.value.toLocaleString("en-IN")}` : "—"),
+    },
+    {
+      key: "expected_budget",
+      header: "Expected budget",
+      help: help("expected_budget"),
+      render: (row) => (typeof row.expectedBudget === "number" ? `₹${row.expectedBudget.toLocaleString("en-IN")}` : "—"),
+    },
+    {
+      key: "probability",
+      header: "Probability",
+      sortBy: "probability",
+      help: help("probability"),
+      render: (row) => (typeof row.probability === "number" ? `${row.probability}%` : "—"),
     },
     {
       key: "tags",
       header: "Tags",
+      help: help("tags"),
       render: (row) => (
         <div className="flex flex-wrap gap-1">
           {row.tags.slice(0, 3).map((tag) => (
@@ -551,12 +604,29 @@ function LeadsWorkspace() {
               {tag}
             </Badge>
           ))}
+          {row.tags.length > 3 && <Badge variant="outline" className="text-xs">+{row.tags.length - 3}</Badge>}
         </div>
       ),
     },
+    { key: "first_name", header: "First name", render: (row) => <Truncated value={row.firstName} /> },
+    { key: "last_name", header: "Last name", render: (row) => <Truncated value={row.lastName} /> },
+    { key: "alternate_mobile", header: "Alternate mobile", render: (row) => row.alternateMobile ?? "—" },
+    { key: "designation", header: "Designation", render: (row) => <Truncated value={row.designation} /> },
+    { key: "website", header: "Website", render: (row) => <Truncated value={row.website} /> },
+    { key: "description", header: "Notes", render: (row) => <Truncated value={row.description} /> },
+    { key: "created_at", header: "Created", sortBy: "created_at", render: (row) => dateCell(row.createdAt) },
+    { key: "updated_at", header: "Updated", sortBy: "updated_at", render: (row) => dateCell(row.updatedAt) },
+  ];
+
+  const leading: ServerListColumn<Lead>[] = canBulk
+    ? [{ key: "select", header: "", render: () => null }]
+    : [];
+
+  const trailing: ServerListColumn<Lead>[] = [
     {
       key: "actions",
       header: "",
+      className: "text-right",
       render: (row) => (
         <div className="flex justify-end gap-2">
           {canUpdate && (
@@ -590,10 +660,15 @@ function LeadsWorkspace() {
     },
   ];
 
-  // The selection column only feeds the bulk bar.
-  const columns = canBulk ? allColumns : allColumns.filter((column) => column.key !== "select");
+  const detailLead = leads.find((candidate) => candidate.id === detailLeadId) ?? null;
 
-  const detailLead = leads.find((l) => l.id === detailLeadId) ?? null;
+  // Exporting follows the selection: the ticked rows, or everything the filters
+  // match when nothing is ticked.
+  const exportParams = { ...list.filters, ...exportSelectionParams(list.selection) };
+  const exportScope =
+    list.selection.mode === "ids"
+      ? `The ${list.selection.ids.length} selected lead(s)`
+      : `All ${total.toLocaleString("en-IN")} lead(s) matching your filters`;
 
   return (
     <div className="space-y-6">
@@ -605,7 +680,7 @@ function LeadsWorkspace() {
 
         <div className="flex flex-wrap items-center gap-2">
         {canExport && (
-          <ExportButton path={apiRoutes.leadsExport} params={exportParams} fileName="leads.csv" />
+          <ExportButton path={apiRoutes.leadsExport} params={exportParams} fileName="leads" scopeLabel={exportScope} />
         )}
         <LeadFormDialog
           mode={formMode}
@@ -655,13 +730,27 @@ function LeadsWorkspace() {
 
       <HeldLeadsNotice />
 
-      <Tabs value={view} onValueChange={(v) => setView(v as ViewMode)}>
+      <Tabs value={view} onValueChange={(next) => setView(next as ViewMode)}>
         <TabsList>
           <TabsTrigger value="list">List</TabsTrigger>
           <TabsTrigger value="kanban">Kanban</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {view !== "analytics" && (
+        <SavedViewsBar
+          listKey={LIST_KEY}
+          activeViewId={list.activeViewId}
+          onApply={list.applyView}
+          current={{
+            filters,
+            sort: list.sort,
+            columns: list.columns,
+            viewMode: view === "kanban" ? "kanban" : "table",
+          }}
+        />
+      )}
 
       {view !== "analytics" && (
         <div className="flex flex-wrap items-center gap-2">
@@ -682,7 +771,7 @@ function LeadsWorkspace() {
 
           <Input
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(event) => setSearchInput(event.target.value)}
             placeholder="Search leads..."
             className="max-w-xs"
           />
@@ -690,9 +779,9 @@ function LeadsWorkspace() {
           <Select value={stageFilter} onValueChange={changeFilter(setStageFilter)}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Stages</SelectItem>
-              {statuses.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              <SelectItem value={ALL}>All Stages</SelectItem>
+              {statuses.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -700,9 +789,9 @@ function LeadsWorkspace() {
           <Select value={ownerFilter} onValueChange={changeFilter(setOwnerFilter)}>
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Owners</SelectItem>
-              {owners.map((o) => (
-                <SelectItem key={o.id} value={o.id}>{o.fullName}</SelectItem>
+              <SelectItem value={ALL}>All Owners</SelectItem>
+              {owners.map((owner) => (
+                <SelectItem key={owner.id} value={owner.id}>{owner.fullName}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -710,7 +799,7 @@ function LeadsWorkspace() {
           <Select value={priorityFilter} onValueChange={changeFilter(setPriorityFilter)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Priorities</SelectItem>
+              <SelectItem value={ALL}>All Priorities</SelectItem>
               <SelectItem value="low">Low</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="high">High</SelectItem>
@@ -721,26 +810,32 @@ function LeadsWorkspace() {
           <Select value={temperatureFilter} onValueChange={changeFilter(setTemperatureFilter)}>
             <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Temperatures</SelectItem>
+              <SelectItem value={ALL}>All Temperatures</SelectItem>
               <SelectItem value="hot">Hot</SelectItem>
               <SelectItem value="warm">Warm</SelectItem>
               <SelectItem value="cold">Cold</SelectItem>
             </SelectContent>
           </Select>
+
+          {hasFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          )}
         </div>
       )}
 
-      {selectedIds.size > 0 && view === "list" && canBulk && (
+      {chosen > 0 && view === "list" && canBulk && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
           <span className="text-sm font-medium">
-            {selectedIds.size} selected{selectedIds.size === filteredLeads.length ? " (this page)" : ""}
+            {allMatching ? `All ${chosen.toLocaleString("en-IN")} matching leads` : `${chosen} selected`}
           </span>
 
           <Select onValueChange={handleBulkStageChange}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Change stage" /></SelectTrigger>
             <SelectContent>
-              {statuses.map((s) => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              {statuses.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -748,8 +843,8 @@ function LeadsWorkspace() {
           <Select onValueChange={handleBulkAssign}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Assign to" /></SelectTrigger>
             <SelectContent>
-              {assignableOwners.map((o) => (
-                <SelectItem key={o.id} value={o.id}>{o.fullName}</SelectItem>
+              {assignableOwners.map((owner) => (
+                <SelectItem key={owner.id} value={owner.id}>{owner.fullName}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -760,9 +855,13 @@ function LeadsWorkspace() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete {selectedIds.size} lead(s)?</AlertDialogTitle>
+                <AlertDialogTitle>
+                  Delete {allMatching ? `all ${chosen.toLocaleString("en-IN")} matching` : chosen} lead(s)?
+                </AlertDialogTitle>
                 <AlertDialogDescription>
-                  This can&apos;t be undone.
+                  {allMatching
+                    ? "This deletes every lead matching your current filters, including those on other pages. This can't be undone."
+                    : "This can't be undone."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -771,50 +870,73 @@ function LeadsWorkspace() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-
-          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
-            Clear
-          </Button>
         </div>
       )}
 
       {view === "list" && (
-        <DataTable
-          columns={columns}
-          data={filteredLeads}
+        <ServerList<Lead>
+          rows={leads}
           getRowId={(row) => row.id}
-          isLoading={isLoading && filteredLeads.length === 0}
-          pageSize={LIST_PAGE_SIZE}
-          emptyMessage="No leads match your filters."
-          manual={{
-            total,
-            page,
-            onPageChange: (next) => {
-              setPage(next);
-              setSelectedIds(new Set());
-            },
-            sortKey: sort.key || undefined,
-            sortDir: sort.dir,
-            onSortChange: (key, dir) => {
-              if (!SORT_FIELDS[key]) return;
-              setSort({ key, dir });
-              setPage(1);
-            },
-          }}
+          leading={leading}
+          columns={columns}
+          trailing={trailing}
+          isLoading={isLoading}
+          pagination={pagination}
+          page={list.page}
+          perPage={list.perPage}
+          onPageChange={list.setPage}
+          onPerPageChange={list.setPerPage}
+          sort={list.sort}
+          onSortChange={list.setSort}
+          columnChoices={list.columns}
+          columnHelp={list.fieldHelp}
+          onColumnsChange={list.saveColumns}
+          onColumnsReset={list.resetColumns}
+          selection={canBulk ? list.selection : undefined}
+          onSelectionChange={canBulk ? list.setSelection : undefined}
+          emptyState={emptyState}
+          noun={list.nouns?.one ?? "lead"}
+          nounPlural={list.nouns?.many ?? "leads"}
+          hasFilters={hasFilters}
+          hasAnyWithoutFilters={hasAnyWithoutFilters}
+          onClearFilters={clearFilters}
+          createAction={canCreate && !atLeadLimit ? { label: "New Lead", onClick: openCreate } : undefined}
         />
       )}
 
       {view === "kanban" && (
-        <KanbanBoard
-          leads={filteredLeads}
-          statuses={statuses}
-          owners={owners}
-          onOpen={setDetailLeadId}
-          onMoveLead={canUpdate ? handleMoveLead : undefined}
-        />
+        <div className="space-y-2">
+          {total > BOARD_PAGE_SIZE && (
+            <Alert>
+              <AlertTitle>Showing the first {BOARD_PAGE_SIZE} of {total.toLocaleString("en-IN")} leads</AlertTitle>
+              <AlertDescription>
+                The board loads one page at a time. Narrow the filters, or use the List view to reach the rest.
+              </AlertDescription>
+            </Alert>
+          )}
+          <KanbanBoard
+            leads={leads}
+            statuses={statuses}
+            owners={owners}
+            onOpen={setDetailLeadId}
+            onMoveLead={canUpdate ? handleMoveLead : undefined}
+          />
+        </div>
       )}
 
-      {view === "analytics" && <LeadAnalytics leads={leads} statuses={statuses} />}
+      {view === "analytics" && (
+        <div className="space-y-2">
+          {total > BOARD_PAGE_SIZE && (
+            <Alert>
+              <AlertTitle>Based on the first {BOARD_PAGE_SIZE} of {total.toLocaleString("en-IN")} leads</AlertTitle>
+              <AlertDescription>
+                These figures count the leads loaded on this page only. Server-side lead analytics are still to come.
+              </AlertDescription>
+            </Alert>
+          )}
+          <LeadAnalytics leads={leads} statuses={statuses} />
+        </div>
+      )}
 
       <LeadDetailSheet
         lead={detailLead}

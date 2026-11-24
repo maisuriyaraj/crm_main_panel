@@ -38,21 +38,14 @@ export interface ContactNote {
   updatedAt: string;
 }
 
-export interface ContactsPagination {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-}
-
-// Server-side query state. Unlike the Leads screen, which pulls 1000 rows and
-// filters in the browser, every one of these is sent to the API.
+// Server-side query state. Both lists send every one of these to the API now;
+// the page size must be one the shared contract offers (10 / 25 / 50 / 100).
 export interface ContactListQuery {
   search?: string;
   assigned_to?: string;
   tag?: string;
   page?: number;
-  limit?: number;
+  per_page?: number;
   sort_by?: "created_at" | "updated_at" | "full_name" | "company_name";
   sort_dir?: "ASC" | "DESC";
 }
