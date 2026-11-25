@@ -6,6 +6,8 @@ import { z } from "zod";
 
 import type { ComponentProps } from "react";
 import { apiFieldErrors } from "@/lib/auth/errors";
+import { GST_COUNTRY, GST_STATE_CODES, GST_STATES, GSTIN_PATTERN, gstinMatchesState } from "@/lib/gst";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { CompanyInput, OnboardingCompany } from "@/lib/store/slices/onboardingSlice";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -29,6 +31,8 @@ const companySchema = z
     phone: z.string().trim().refine((v) => !v || /^\+?[0-9][0-9\s-]{6,19}$/.test(v), "Enter a valid phone number"),
     website: z.string().trim().max(255, "Website is too long").refine((v) => !v || /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(v), "Start with https:// or http://"),
     industry: z.string().trim().max(100, "Industry is too long").refine((v) => !v || v.length >= 2, "At least 2 characters"),
+    gstin: z.string().trim().toUpperCase().refine((v) => !v || GSTIN_PATTERN.test(v), "Enter a valid 15-character GSTIN"),
+    gst_state_code: z.string().trim(),
   })
   .superRefine((values, ctx) => {
     // An address is all or nothing: once any part is given, these three are needed.
@@ -37,6 +41,16 @@ const companySchema = z
     if (!values.line1) ctx.addIssue({ code: "custom", path: ["line1"], message: "Enter the first address line" });
     if (!values.city) ctx.addIssue({ code: "custom", path: ["city"], message: "Enter the city" });
     if (!values.country) ctx.addIssue({ code: "custom", path: ["country"], message: "Enter the country code" });
+  })
+  .superRefine((values, ctx) => {
+    // GST is Indian, and a GSTIN always starts with its own state's code. Both
+    // rules are the API's; checking them here saves a round trip.
+    const indian = values.country.toUpperCase() === GST_COUNTRY;
+    if (!indian && values.gstin) ctx.addIssue({ code: "custom", path: ["gstin"], message: "A GSTIN is only for a company in India" });
+    if (!indian && values.gst_state_code) ctx.addIssue({ code: "custom", path: ["gst_state_code"], message: "A GST state is only for a company in India" });
+    if (!gstinMatchesState(values.gstin, values.gst_state_code)) {
+      ctx.addIssue({ code: "custom", path: ["gstin"], message: "This GSTIN is not from the chosen state: a GSTIN starts with its state code" });
+    }
   });
 
 type CompanyValues = z.infer<typeof companySchema>;
@@ -54,6 +68,8 @@ const FIELD_FROM_API: Record<string, keyof CompanyValues> = {
   phone: "phone",
   website: "website",
   industry: "industry",
+  gstin: "gstin",
+  gst_state_code: "gst_state_code",
 };
 
 const countryName = (code: string) => {
@@ -73,15 +89,18 @@ export function CompanyStep({
   onSkip,
   onBack,
   canSkip,
+  submitLabel = "Save and continue",
 }: {
   company: OnboardingCompany;
   isSaving: boolean;
   error: string | null;
   // Resolves with the API failure, or null when saved.
   onSave: (input: CompanyInput) => Promise<unknown | null>;
-  onSkip: () => void;
+  onSkip?: () => void;
   onBack?: () => void;
   canSkip: boolean;
+  // Settings shows "Save changes": the same form with nothing to continue to.
+  submitLabel?: string;
 }) {
   const form = useForm<CompanyValues>({
     resolver: zodResolver(companySchema),
@@ -97,9 +116,12 @@ export function CompanyStep({
       phone: company.phone ?? "",
       website: company.website ?? "",
       industry: company.industry ?? "",
+      gstin: company.gstin ?? "",
+      gst_state_code: company.gst_state_code ?? "",
     },
   });
   const country = useWatch({ control: form.control, name: "country" });
+  const isIndian = (country ?? "").toUpperCase() === GST_COUNTRY;
 
   const submit = async (values: CompanyValues) => {
     const hasAddress = [values.line1, values.line2, values.city, values.state, values.postal_code].some(Boolean);
@@ -112,6 +134,10 @@ export function CompanyStep({
       phone: values.phone,
       website: values.website,
       industry: values.industry,
+      // Cleared rather than left alone: on this form an empty box means the
+      // member removed the value, and null is how the API is told so.
+      gstin: values.gstin || null,
+      gst_state_code: values.gst_state_code || null,
     });
     if (!failure) return;
     apiFieldErrors(failure).forEach(({ field, message }) => {
@@ -158,8 +184,40 @@ export function CompanyStep({
           {text("website", "Website", { type: "url", placeholder: "https://", autoComplete: "url" })}
           {text("industry", "Industry", { placeholder: "For example, Software" })}
         </div>
+        {isIndian && (
+          <fieldset className="space-y-4">
+            <legend className="text-sm font-medium">Tax details <span className="font-normal text-muted-foreground">(optional)</span></legend>
+            <p className="text-sm text-muted-foreground">
+              Used on the invoices OrbitOps sends you. Your GST state decides whether CGST and SGST or IGST applies.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="gst_state_code"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GST state</FormLabel>
+                    <Select value={field.value || "none"} onValueChange={(value) => field.onChange(value === "none" ? "" : value)}>
+                      <FormControl>
+                        <SelectTrigger><SelectValue placeholder="Choose a state" /></SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="max-h-72">
+                        <SelectItem value="none">Not set</SelectItem>
+                        {GST_STATE_CODES.map((code) => (
+                          <SelectItem key={code} value={code}>{code} · {GST_STATES[code]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {text("gstin", "GSTIN", { maxLength: 15, className: "uppercase", placeholder: "22AAAAA0000A1Z5" }, "15 characters, starting with your state code.")}
+            </div>
+          </fieldset>
+        )}
         <StepAlert message={error} />
-        <StepActions isSaving={isSaving} onBack={onBack} onSkip={canSkip ? onSkip : undefined} submitLabel="Save and continue" />
+        <StepActions isSaving={isSaving} onBack={onBack} onSkip={canSkip && onSkip ? onSkip : undefined} submitLabel={submitLabel} />
       </form>
     </Form>
   );

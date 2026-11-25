@@ -21,6 +21,8 @@ export const pageRoutes = {
     setup: "/setup",
     settingsIntegrations: "/settings/integrations",
     settingsBilling: "/settings/billing",
+    settingsCompany: "/settings/company",
+    settingsNotifications: "/settings/notifications",
     settingsTeamRoles: "/settings/team/roles",
     settingsTeamRoleNew: "/settings/team/roles/new",
     leads: "/leads",
@@ -89,10 +91,14 @@ export const apiRoutes = {
     storageUsage: "/storage/usage",
     usage: "/app/usage",
     usageHeldLeads: "/app/usage/held-leads",
-    // The organization's own invoices from OrbitOps, read only.
+    // The organization's own invoices from OrbitOps, read only, and asking
+    // OrbitOps about a different plan (the only write here).
     billingInvoices: "/app/billing/invoices",
+    billingUpgradeRequest: "/app/billing/upgrade-request",
     notifications: "/app/notifications",
     notificationsReadAll: "/app/notifications/read-all",
+    // Each member's own choice of which notices they get.
+    notificationPreferences: "/app/notification-preferences",
     // Multi-factor sign-in: the three sign-in steps take the short-lived MFA token,
     // the rest act on the signed-in member.
     mfaEnrollStart: "/auth/mfa/enroll/start",
@@ -115,6 +121,12 @@ export const apiRoutes = {
     onboardingLogo: "/app/onboarding/logo",
     onboardingComplete: "/app/onboarding/complete",
     organizationLogo: "/app/organization/logo",
+    // Company settings: the same service and fields as the wizard's steps above,
+    // for editing them any time after setup.
+    settings: "/app/settings",
+    settingsCompany: "/app/settings/company",
+    settingsLocale: "/app/settings/locale",
+    settingsLogo: "/app/settings/logo",
     // Connecting Meta and Google ad accounts, and what the sync pulled back
     // ("/{provider}/connect", "/{provider}/accounts", "/{provider}",
     // "/{provider}/sync", "/{provider}/campaigns").

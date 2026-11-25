@@ -269,6 +269,20 @@ function LeadsWorkspace() {
     dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
   }, [detailLeadId, dispatch]);
 
+  // A notification about a lead lands here with ?lead=<id>. The sheet reads the lead
+  // out of the loaded page, so it only opens once that lead is in the list; either
+  // way the parameter is cleared, so a reload does not reopen it and a lead that is
+  // not on this page simply leaves the person on the list.
+  const deepLinkLeadId = searchParams.get("lead");
+  useEffect(() => {
+    if (!deepLinkLeadId || isLoading) return;
+    if (leads.some((candidate) => candidate.id === deepLinkLeadId)) setDetailLeadId(deepLinkLeadId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("lead");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  }, [deepLinkLeadId, isLoading, leads, pathname, router, searchParams]);
+
   const total = pagination?.total ?? leads.length;
   const chosen = selectionCount(list.selection);
   const allMatching = list.selection.mode === "all_matching";

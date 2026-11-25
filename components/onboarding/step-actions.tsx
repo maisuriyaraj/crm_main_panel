@@ -19,6 +19,10 @@ export function StepActions({
   onContinue?: () => void;
   continueLabel?: string;
 }) {
+  // Settings reuses the steps without the wizard's Back, Skip and Continue; with
+  // nothing left to show, the divider line would be the only thing drawn.
+  if (!onBack && !onSkip && !submitLabel && !onContinue) return null;
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-4">
       <div>

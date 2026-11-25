@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import { Building2, Gauge, LogOut, Moon, Plug, Rocket, ShieldCheck, Sun } from "lucide-react";
+import { Bell, Building2, CreditCard, Gauge, LogOut, Moon, Plug, Rocket, ShieldCheck, Sun } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAppSelector } from "@/lib/store/hooks";
@@ -31,7 +31,9 @@ export function AppSidebar() {
   const params = useParams<{ orgnization: string }>();
   const { user, can, moduleOff, logout } = useAuth();
   // Known after the setup wizard loads; changes when an admin uploads a new logo.
-  const logoVersion = useAppSelector((state) => state.onboarding.state?.values.logo.updated_at ?? null);
+  const logoVersion = useAppSelector(
+    (state) => state.orgSettings.settings?.logo.updated_at ?? state.onboarding.state?.values.logo.updated_at ?? null,
+  );
   const orgName = user?.organizationName || SITE_NAME;
   // Only when the plan has an ad platform to connect; the API checks the same flags.
   const adsOn = useAppSelector((state) => isFeatureOn(state.features, "ads_enabled") && (isFeatureOn(state.features, "ads_meta") || isFeatureOn(state.features, "ads_google")));
@@ -90,10 +92,10 @@ export function AppSidebar() {
         <SidebarMenu>
           {can("organization.settings.manage") && (
             <SidebarMenuItem>
-              <SidebarMenuButton asChild tooltip="Company setup" isActive={isActive(buildHref(pageRoutes.setup))}>
-                <Link href={buildHref(pageRoutes.setup)}>
+              <SidebarMenuButton asChild tooltip="Company settings" isActive={isActive(buildHref(pageRoutes.settingsCompany))}>
+                <Link href={buildHref(pageRoutes.settingsCompany)}>
                   <Building2 />
-                  <span>Company setup</span>
+                  <span>Company</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -114,6 +116,26 @@ export function AppSidebar() {
               <Link href={buildHref(pageRoutes.settingsUsage)}>
                 <Gauge />
                 <span>Plan &amp; usage</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {/* The invoices OrbitOps sends: the same permission the API checks. */}
+          {can("billing.view") && (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Billing" isActive={isActive(buildHref(pageRoutes.settingsBilling))}>
+                <Link href={buildHref(pageRoutes.settingsBilling)}>
+                  <CreditCard />
+                  <span>Billing</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          {/* Everyone chooses their own notices. */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Notifications" isActive={isActive(buildHref(pageRoutes.settingsNotifications))}>
+              <Link href={buildHref(pageRoutes.settingsNotifications)}>
+                <Bell />
+                <span>Notifications</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -10,6 +10,7 @@ import { setSubscriptionInactiveListener } from "@/lib/axios";
 import { isSetupDeferred, subscribeToSetupDeferral, workspacePath } from "@/lib/onboarding";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { isSubscriptionInactive, reqToGetFeatures, subscriptionInactive } from "@/lib/store/slices/featuresSlice";
+import { reqToGetOrgSettings } from "@/lib/store/slices/orgSettingsSlice";
 import { useAuth } from "@/hooks/useAuth";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -35,16 +36,28 @@ export function WorkspaceGate({ children }: { children: ReactNode }) {
   const params = useParams<{ orgnization: string }>();
   const { user, can } = useAuth();
   const features = useAppSelector((state) => state.features);
+  const orgSettings = useAppSelector((state) => state.orgSettings);
   const inactive = isSubscriptionInactive(features);
   const orgSlug = params?.orgnization ?? "";
   const path = workspacePath(pathname);
   const onSetup = isUnder(path, [pageRoutes.setup]);
-  const setupDue = !!user?.onboardingPending && can("organization.settings.manage");
+  const canManageSettings = can("organization.settings.manage");
+  const setupDue = !!user?.onboardingPending && canManageSettings;
   const deferred = useSyncExternalStore(subscribeToSetupDeferral, isSetupDeferred, () => false);
 
   useEffect(() => {
     if (!features.isLoaded && !features.isLoading) dispatch(reqToGetFeatures({}));
   }, [dispatch, features.isLoaded, features.isLoading]);
+
+  // The organization's date format and currency decide how every screen reads a
+  // date, so they are loaded once for the whole shell rather than per page. Only
+  // members who may manage settings can read them; everyone else keeps the
+  // default order until the API carries it on /auth/me for all.
+  useEffect(() => {
+    if (canManageSettings && !orgSettings.isLoaded && !orgSettings.isLoading && !orgSettings.error) {
+      dispatch(reqToGetOrgSettings({ data: null }));
+    }
+  }, [dispatch, canManageSettings, orgSettings.isLoaded, orgSettings.isLoading, orgSettings.error]);
 
   useEffect(() => {
     setSubscriptionInactiveListener((status) => dispatch(subscriptionInactive(status)));
@@ -101,7 +114,7 @@ function SubscriptionEnded({ status, orgSlug, canTeam, canSetup }: { status: str
             <Button asChild><Link href={buildOrgRoute(orgSlug, pageRoutes.settingsTeam)}>Team settings</Link></Button>
           )}
           {canSetup && (
-            <Button asChild variant="outline"><Link href={buildOrgRoute(orgSlug, pageRoutes.setup)}>Company settings</Link></Button>
+            <Button asChild variant="outline"><Link href={buildOrgRoute(orgSlug, pageRoutes.settingsCompany)}>Company settings</Link></Button>
           )}
           <Button asChild variant="outline"><Link href={buildOrgRoute(orgSlug, pageRoutes.settingsSecurity)}>Security settings</Link></Button>
         </div>

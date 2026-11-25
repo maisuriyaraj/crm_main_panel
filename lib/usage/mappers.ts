@@ -4,6 +4,7 @@
 import type {
   ApiUsageMeasure,
   AppNotification,
+  NotificationLink,
   HeldLeads,
   LimitRefusal,
   UsageMeasure,
@@ -85,6 +86,17 @@ export const mapHeldLeadsFromApi = (input: unknown): HeldLeads => {
   };
 };
 
+// Older rows have no stored link; the API works one out from their payload, so
+// there is nothing to guess here — an answer without one simply has none.
+const mapNotificationLink = (input: unknown): NotificationLink | null => {
+  if (!input || typeof input !== "object") return null;
+  const raw = input as Raw;
+  const url = str(raw.url);
+  const kind = str(raw.kind);
+  if (!url && !kind) return null;
+  return { kind, id: raw.id === null || raw.id === undefined ? null : String(raw.id), url };
+};
+
 export const mapNotificationFromApi = (input: unknown): AppNotification => {
   const raw = obj(input);
   const payload = raw.payload && typeof raw.payload === "object" ? (raw.payload as Raw) : null;
@@ -92,7 +104,11 @@ export const mapNotificationFromApi = (input: unknown): AppNotification => {
   return {
     id: String(raw.id),
     type,
+    // Notices written before titles existed have only a message; the list then
+    // shows that as the headline rather than an empty line.
+    title: str(payload?.title),
     message: str(payload?.message) ?? type,
+    link: mapNotificationLink(raw.link),
     payload,
     readAt: str(raw.read_at),
     createdAt: str(raw.created_at),

@@ -1,30 +1,34 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useParams } from "next/navigation";
 import { CreditCard, Download, RefreshCw } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
-import { reqToGetInvoices, type TenantInvoice } from "@/lib/store/slices/billingSlice";
+import { reqToGetInvoices, type InvoiceStatusFilter, type TenantInvoice } from "@/lib/store/slices/billingSlice";
 import { Axios } from "@/lib/axios";
-import { apiRoutes } from "@/lib/constants";
+import { apiRoutes, buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { notify } from "@/lib/commonFunctions";
 import { apiErrorMessage } from "@/lib/auth/errors";
+import { useDateFormat } from "@/hooks/useDateFormat";
 import { NoAccess } from "@/components/auth/no-access";
+import { UpgradeRequestDialog } from "@/components/billing/upgrade-request-dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useUsage } from "@/hooks/useUsage";
 
 // Amounts arrive in the currency's smallest unit (paise, cents) as integers, so
 // nothing is ever added up in floating point. Only the display divides.
 const money = (minor: number, currency: string) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 2 }).format(minor / 100);
-
-const dateText = (value: string | null) =>
-  value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 const STATUS_TONE: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   paid: "secondary",
@@ -40,18 +44,33 @@ const STATUS_LABEL: Record<string, string> = {
   void: "Cancelled",
 };
 
+// The API's own filter values. A draft invoice is OrbitOps' working copy and is
+// never sent to a tenant, so there is nothing to filter for it.
+const STATUS_FILTERS: Array<{ value: InvoiceStatusFilter; label: string }> = [
+  { value: "PENDING", label: "Due" },
+  { value: "PAID", label: "Paid" },
+  { value: "OVERDUE", label: "Overdue" },
+  { value: "VOID", label: "Cancelled" },
+];
+
 // What OrbitOps has charged this organization. Read only: paying is arranged with
 // OrbitOps directly, there is no card on file to charge. Lives under /settings so
 // it stays reachable when the subscription has ended, which is when it matters most.
 export default function BillingPage() {
   const dispatch = useAppDispatch();
+  const params = useParams<{ orgnization: string }>();
   const { can } = useAuth();
   const { invoices, totals, credit, isLoaded, isLoading, error, total } = useAppSelector((state) => state.billing);
+  const { formatDate } = useDateFormat();
+  const [status, setStatus] = useState<InvoiceStatusFilter | "ALL">("ALL");
   const allowed = can("billing.view");
+  // The plan's name, so this screen can say what is being billed and the upgrade
+  // dialog can repeat it. Every member may read it.
+  const { summary } = useUsage();
 
   useEffect(() => {
-    if (allowed) dispatch(reqToGetInvoices({ data: { page: 1 } }));
-  }, [dispatch, allowed]);
+    if (allowed) dispatch(reqToGetInvoices({ data: { page: 1, status: status === "ALL" ? null : status } }));
+  }, [dispatch, allowed, status]);
 
   // Fires no request without the permission, so a typed-in URL costs nothing.
   if (!allowed) {
@@ -60,7 +79,10 @@ export default function BillingPage() {
 
   const openPdf = async (invoice: TenantInvoice) => {
     try {
-      const response = await Axios.get(`${apiRoutes.billingInvoices}/${invoice.id}/pdf`);
+      // The route redirects to a fresh signed link by default, which a browser
+      // request would follow without our cookie; format=json asks for the link
+      // itself so it can be opened in a new tab.
+      const response = await Axios.get(`${apiRoutes.billingInvoices}/${invoice.id}/pdf`, { params: { format: "json" } });
       const url = response.data?.data?.url;
       if (!url) throw new Error("no link");
       // A fresh short-lived link from storage, so it is opened rather than stored.
@@ -83,7 +105,7 @@ export default function BillingPage() {
       header: "Issued",
       sortable: true,
       accessor: (row) => row.issueDate,
-      render: (row) => dateText(row.issueDate),
+      render: (row) => formatDate(row.issueDate),
     },
     {
       key: "dueDate",
@@ -92,7 +114,7 @@ export default function BillingPage() {
       accessor: (row) => row.dueDate,
       // Narrow phones get the essentials; due date is the first to go.
       className: "hidden sm:table-cell",
-      render: (row) => dateText(row.dueDate),
+      render: (row) => formatDate(row.dueDate),
     },
     {
       key: "status",
@@ -144,10 +166,30 @@ export default function BillingPage() {
             What OrbitOps has invoiced your organization. To pay an invoice or change your plan, contact OrbitOps.
           </p>
         </div>
-        <Button variant="outline" onClick={() => dispatch(reqToGetInvoices({ data: { page: 1 } }))} disabled={isLoading}>
-          <RefreshCw className="size-4" aria-hidden /> Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <UpgradeRequestDialog planName={summary?.planName ?? null} variant="outline" label="Request an upgrade" />
+          <Button variant="outline" onClick={() => dispatch(reqToGetInvoices({ data: { page: 1, status: status === "ALL" ? null : status } }))} disabled={isLoading}>
+            <RefreshCw className="size-4" aria-hidden /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* What is being billed, next to what is owed for it. The limits and bars
+          live on Plan & usage, which every member may open. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{summary?.planName ?? "Your plan"}</CardTitle>
+          <CardDescription>
+            {summary?.planName
+              ? "Your current plan. OrbitOps invoices your organization for it; a tenant cannot change its own plan."
+              : "Your organization has no plan yet."}{" "}
+            <Link className="underline" href={buildOrgRoute(params?.orgnization ?? "", pageRoutes.settingsUsage)}>
+              See your limits and usage
+            </Link>
+            .
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
       {(totals.length > 0 || credit.length > 0) && (
         <div className="grid gap-4 sm:grid-cols-2">
@@ -195,11 +237,31 @@ export default function BillingPage() {
         </Card>
       ) : (
         <Card>
-          <CardHeader>
-            <CardTitle>Invoices</CardTitle>
-            <CardDescription>
-              {total === 0 ? "No invoices yet." : `${total} invoice${total === 1 ? "" : "s"}, newest first.`}
-            </CardDescription>
+          <CardHeader className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <CardTitle>Invoices</CardTitle>
+              <CardDescription>
+                {total === 0
+                  ? status === "ALL"
+                    ? "No invoices yet."
+                    : "No invoices match this filter."
+                  : `${total} invoice${total === 1 ? "" : "s"}, newest first.`}
+              </CardDescription>
+            </div>
+            {/* The API filters, so the list reloads rather than hiding rows: a
+                filtered page still shows its own total and pages correctly. */}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="invoice-status" className="text-sm text-muted-foreground">Status</Label>
+              <Select value={status} onValueChange={(value) => setStatus(value as InvoiceStatusFilter | "ALL")}>
+                <SelectTrigger id="invoice-status" className="w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">All</SelectItem>
+                  {STATUS_FILTERS.map((entry) => (
+                    <SelectItem key={entry.value} value={entry.value}>{entry.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             <DataTable
@@ -209,7 +271,11 @@ export default function BillingPage() {
               searchKeys={["number", "status"]}
               searchPlaceholder="Search invoices"
               isLoading={isLoading}
-              emptyMessage="No invoices yet. Your first one appears after your billing period is invoiced."
+              emptyMessage={
+                status === "ALL"
+                  ? "No invoices yet. Your first one appears after your billing period is invoiced."
+                  : "No invoices with this status. Choose All to see every invoice."
+              }
             />
           </CardContent>
         </Card>

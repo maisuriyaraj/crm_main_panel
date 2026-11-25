@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
-import { Building2, Clock, ImageUp, Megaphone, UserPlus } from "lucide-react";
+import { Building2, CalendarDays, Clock, ImageUp, Megaphone, UserPlus } from "lucide-react";
 
-import type { OnboardingState } from "@/lib/store/slices/onboardingSlice";
+import type { LocaleInput, OnboardingState } from "@/lib/store/slices/onboardingSlice";
+import { DATE_FORMATS, dateFormatExample, DEFAULT_DATE_FORMAT, type DateFormat } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -33,9 +34,9 @@ export function LogoStep({
   isSaving: boolean;
   error: string | null;
   onUpload: (file: File) => Promise<boolean>;
-  onSkip: () => void;
-  onBack: () => void;
-  onContinue: () => void;
+  onSkip?: () => void;
+  onBack?: () => void;
+  onContinue?: () => void;
   canSkip: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -129,26 +130,31 @@ export function LocaleStep({
   onSkip,
   onBack,
   canSkip,
+  submitLabel = "Save and continue",
 }: {
   locale: Values["locale"];
   isSaving: boolean;
   error: string | null;
-  onSave: (input: { currency: string; timezone: string }) => void;
-  onSkip: () => void;
-  onBack: () => void;
+  onSave: (input: LocaleInput) => void;
+  onSkip?: () => void;
+  onBack?: () => void;
   canSkip: boolean;
+  // Settings shows "Save changes": the same form with nothing to continue to.
+  submitLabel?: string;
 }) {
   const zones = useMemo(() => allTimeZones(), []);
   const [currency, setCurrency] = useState(locale.currency ?? locale.allowed_currencies[0] ?? "INR");
   // An organization still on the default UTC most likely wants its own zone.
   const [timezone, setTimezone] = useState(locale.timezone && locale.timezone !== "UTC" ? locale.timezone : browserTimeZone());
+  const [dateFormat, setDateFormat] = useState<DateFormat>(locale.date_format ?? DEFAULT_DATE_FORMAT);
+  const formats = locale.allowed_date_formats?.length ? locale.allowed_date_formats : [...DATE_FORMATS];
 
   return (
     <form
       className="space-y-5"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({ currency, timezone });
+        onSave({ currency, timezone, date_format: dateFormat });
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
@@ -176,13 +182,25 @@ export function LocaleStep({
           </Select>
           <p className="text-xs text-muted-foreground">Used for dates, reminders and trial notices.</p>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="setup-date-format" className="flex items-center gap-1.5"><CalendarDays className="size-3.5" aria-hidden /> Date format</Label>
+          <Select value={dateFormat} onValueChange={(value) => setDateFormat(value as DateFormat)}>
+            <SelectTrigger id="setup-date-format"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {formats.map((format) => (
+                <SelectItem key={format} value={format}>{format} · {dateFormatExample(format)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">How dates are shown to everyone in your workspace.</p>
+        </div>
       </div>
       <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
         This does not change your OrbitOps subscription
         {locale.billing_currency ? <>, which stays billed in <strong>{locale.billing_currency}</strong></> : null}.
       </p>
       <StepAlert message={error} />
-      <StepActions isSaving={isSaving} onBack={onBack} onSkip={canSkip ? onSkip : undefined} submitLabel="Save and continue" />
+      <StepActions isSaving={isSaving} onBack={onBack} onSkip={canSkip && onSkip ? onSkip : undefined} submitLabel={submitLabel} />
     </form>
   );
 }

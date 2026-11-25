@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { Axios } from "@/lib/axios";
 import { apiRoutes } from "@/lib/constants";
+import type { DateFormat } from "@/lib/dates";
 
 // The first-login setup wizard, for members who may manage the organization's
 // settings. Every save answers the whole state, so the screen moves on from it.
@@ -22,6 +23,10 @@ export interface OnboardingCompany {
     phone: string | null;
     website: string | null;
     industry: string | null;
+    // The tax identity. The same two columns platform billing puts on an invoice,
+    // so these are shared with the Master Admin side rather than a copy.
+    gstin: string | null;
+    gst_state_code: string | null;
 }
 
 export interface OnboardingState {
@@ -32,11 +37,22 @@ export interface OnboardingState {
     values: {
         company: OnboardingCompany;
         logo: { has_logo: boolean; path: string | null; mime: string | null; bytes: number; updated_at: string | null };
-        locale: { currency: string | null; timezone: string | null; allowed_currencies: string[]; billing_currency: string | null };
+        locale: OnboardingLocale;
         invite_team: { invitations_sent: number; seats_used: number; seats_limit: number | null };
         ad_accounts: { available: boolean; reason: string };
     };
 }
+
+export interface OnboardingLocale {
+    currency: string | null;
+    timezone: string | null;
+    date_format: DateFormat;
+    allowed_currencies: string[];
+    allowed_date_formats: DateFormat[];
+    billing_currency: string | null;
+}
+
+export type LocaleInput = { currency: string; timezone: string; date_format?: DateFormat };
 
 export type CompanyInput = {
     legal_name: string;
@@ -45,6 +61,10 @@ export type CompanyInput = {
     phone?: string;
     website?: string;
     industry?: string;
+    // Left out they stay as they are; null clears one. Every other field here is
+    // replaced, so leaving one out empties it.
+    gstin?: string | null;
+    gst_state_code?: string | null;
 };
 
 interface OnboardingSliceState {
@@ -93,7 +113,7 @@ export const reqToSaveOnboardingCompany = onboardingThunk<CompanyInput>(
     "Couldn't save the company details",
 );
 
-export const reqToSaveOnboardingLocale = onboardingThunk<{ currency: string; timezone: string }>(
+export const reqToSaveOnboardingLocale = onboardingThunk<LocaleInput>(
     "onboarding/reqToSaveOnboardingLocale",
     (data) => Axios.put(apiRoutes.onboardingLocale, data),
     "Couldn't save the currency and time zone",

@@ -98,6 +98,14 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     NO_REFRESH_TOKEN: "Google didn't allow ongoing access. Remove OrbitOps from your Google account's connected apps, then connect again.",
     PROVIDER_UNAVAILABLE: "The ad platform couldn't be reached. Please try again in a few minutes.",
     PROVIDER_ERROR: "Something went wrong while connecting. Please try again.",
+    // Company settings, the tax identity and the date format
+    GSTIN_INVALID: "Enter a valid 15-character GSTIN.",
+    // The organization's own invoices from OrbitOps, and asking about a plan
+    INVOICE_NOT_FOUND: "That invoice no longer exists. Reload the list and try again.",
+    PDF_NOT_READY: "This invoice's PDF isn't ready yet. It is prepared shortly after the invoice is issued.",
+    // Notification preferences
+    UNKNOWN_ALERT_TYPE: "That notification isn't one you can change. Reload the page and try again.",
+    ALERT_TYPE_LOCKED: "This notification is always sent and can't be turned off.",
     // Refreshing the figures. The platforms are re-read every hour anyway, so a
     // refused refresh is never something the member has to fix.
     SYNC_TOO_SOON: "This platform was refreshed a moment ago. Try again in a few minutes.",

@@ -45,7 +45,8 @@ export const settingsLinks: SettingsLink[] = [
   { label: "Billing", href: pageRoutes.settingsBilling, permission: "billing.view" },
   { label: "Plan & usage", href: pageRoutes.settingsUsage, permission: null },
   { label: "Security", href: pageRoutes.settingsSecurity, permission: null },
-  { label: "Company setup", href: pageRoutes.setup, permission: "organization.settings.manage" },
+  { label: "Notifications", href: pageRoutes.settingsNotifications, permission: null },
+  { label: "Company", href: pageRoutes.settingsCompany, permission: "organization.settings.manage" },
 ];
 
 export const navGroups: NavGroupConfig[] = [

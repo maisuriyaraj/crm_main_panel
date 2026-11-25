@@ -57,10 +57,21 @@ export interface LimitRefusal {
   upgradeMessage: string | null;
 }
 
+// Where a notification points. The API sends a record kind and id, never a panel
+// URL, so the panel keeps its own routing: `kind` with no `id` means that module's
+// own page. `url` is only for a link that is not a record at all.
+export interface NotificationLink {
+  kind: string | null;
+  id: string | null;
+  url: string | null;
+}
+
 export interface AppNotification {
   id: string;
   type: string;
+  title: string | null;
   message: string;
+  link: NotificationLink | null;
   payload: Record<string, unknown> | null;
   readAt: string | null;
   createdAt: string | null;

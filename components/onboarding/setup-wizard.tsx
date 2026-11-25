@@ -19,6 +19,7 @@ import {
   reqToSkipOnboardingStep,
   reqToUploadOnboardingLogo,
   type CompanyInput,
+  type LocaleInput,
   type OnboardingStepKey,
 } from "@/lib/store/slices/onboardingSlice";
 import { useAuth } from "@/hooks/useAuth";
@@ -158,7 +159,7 @@ export function SetupWizard() {
     return false;
   };
 
-  const saveLocale = async (input: { currency: string; timezone: string }) => {
+  const saveLocale = async (input: LocaleInput) => {
     setError(null);
     const action = await dispatch(reqToSaveOnboardingLocale({ data: input, onFailure: (e) => fail(e, "Couldn't save the currency and time zone.") }));
     if (reqToSaveOnboardingLocale.fulfilled.match(action)) next();
