@@ -12,31 +12,45 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 
+import { MessageSquareWarning } from "lucide-react";
+
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { KanbanCard } from "@/components/leads/kanban-card";
-import type { Lead, LeadOwner, LeadStage } from "@/lib/leads/types";
+import { OUTCOME_LABEL, stageOutcome, type Lead, type LeadOwner, type LeadStage } from "@/lib/leads/types";
 
 interface KanbanColumnProps {
-  stageId: string;
-  name: string;
-  color: string;
+  stage: LeadStage;
   leads: Lead[];
   owners: LeadOwner[];
   onOpen: (leadId: string) => void;
 }
 
-function KanbanColumn({ stageId, name, color, leads, owners, onOpen }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: stageId });
+function KanbanColumn({ stage, leads, owners, onOpen }: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
 
   const totalValue = leads.reduce((sum, lead) => sum + (lead.value ?? 0), 0);
+  // A stage that closes a lead, and one that asks for a reason first, both say
+  // so on the column: the member sees it before they drag, not after.
+  const outcome = stageOutcome(stage);
 
   return (
     <div className="flex w-72 shrink-0 flex-col rounded-lg border border-border bg-muted/30">
       <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-          <span className="text-sm font-medium">{name}</span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: stage.color }} />
+          <span className="truncate text-sm font-medium">{stage.name}</span>
           <span className="text-xs text-muted-foreground">{leads.length}</span>
+          {outcome && (
+            <Badge variant={outcome === "won" ? "default" : "destructive"} className="shrink-0 text-[10px]">
+              {OUTCOME_LABEL[outcome]}
+            </Badge>
+          )}
+          {stage.requiresReason && (
+            <span className="shrink-0 text-muted-foreground" title="Moving a lead here needs a reason">
+              <MessageSquareWarning className="h-3.5 w-3.5" />
+            </span>
+          )}
         </div>
         {totalValue > 0 && (
           <span className="text-xs text-muted-foreground">₹{totalValue.toLocaleString("en-IN")}</span>
@@ -118,9 +132,7 @@ export function KanbanBoard({ leads, statuses, owners, onOpen, onMoveLead }: Kan
           {stages.map((stage) => (
             <KanbanColumn
               key={stage.id}
-              stageId={stage.id}
-              name={stage.name}
-              color={stage.color}
+              stage={stage}
               leads={leads.filter((lead) => lead.statusId === stage.id)}
               owners={owners}
               onOpen={onOpen}

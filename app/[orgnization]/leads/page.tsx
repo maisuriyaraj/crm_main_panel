@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 
@@ -22,6 +22,7 @@ import {
   reqToGetLeadNotes,
   reqToGetLeadStatuses,
   reqToGetLeads,
+  reqToGetPipelines,
   reqToUpdateLead,
   reqToUpdateLeadNote,
 } from "@/lib/store/slices/leadsSlice";
@@ -29,8 +30,15 @@ import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
 import { isFeatureOn, reqToGetFeatures } from "@/lib/store/slices/featuresSlice";
 import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
 import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
-import { resolveOwnerName, type Lead, type LeadActivityType } from "@/lib/leads/types";
-import { FALLBACK_LEAD_STATUSES } from "@/lib/leads/fallback-data";
+import {
+  OUTCOME_LABEL,
+  resolveOwnerName,
+  stageOutcome,
+  type Lead,
+  type LeadActivityType,
+  type LeadStage,
+} from "@/lib/leads/types";
+import { readLastPipeline, writeLastPipeline } from "@/lib/leads/last-pipeline";
 import { isCountChanged, selectionCount } from "@/lib/lists/types";
 import { helpFor } from "@/lib/lists/help-text";
 import { exportSelectionParams } from "@/lib/exports";
@@ -44,6 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertDialog,
@@ -58,10 +67,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { LeadFormDialog, type LeadFormValues } from "@/components/leads/lead-form-dialog";
 import { KanbanBoard } from "@/components/leads/kanban-board";
+import { PipelineSelector } from "@/components/leads/pipeline-selector";
+import { PipelineSettingsDialog } from "@/components/leads/pipeline-settings-dialog";
+import { StageReasonDialog, type StageReasonRequest } from "@/components/leads/stage-reason-dialog";
 import { LeadDetailSheet } from "@/components/leads/lead-detail-sheet";
 import { LeadAnalytics } from "@/components/leads/lead-analytics";
 import { NoAccess } from "@/components/auth/no-access";
-import { apiErrorMessage } from "@/lib/auth/errors";
+import { apiErrorCode, apiErrorMessage } from "@/lib/auth/errors";
 import { ExportButton } from "@/components/shared/export-button";
 import { ServerList, type ServerListColumn } from "@/components/shared/server-list";
 import { SavedViewsBar } from "@/components/shared/saved-views-bar";
@@ -127,13 +139,17 @@ function LeadsWorkspace() {
   const canExport = can("leads.export");
   const canConvert = canAll(["leads.update", "contacts.create"]);
   const canLookupMembers = can("members.lookup");
+  const canManagePipeline = can("leads.pipeline.manage");
   // At the plan's lead limit the API refuses every new lead, so say so up front.
   const { summary: usage, refresh: refreshUsage } = useUsage();
   const atLeadLimit = leadsFull(usage);
 
   const { leads, isLoading, hasAnyWithoutFilters, emptyState } = useAppSelector((state) => state.leads);
   const pagination = useAppSelector((state) => state.leads.pagination);
-  const apiStatuses = useAppSelector((state) => state.leads.statuses);
+  const statuses = useAppSelector((state) => state.leads.statuses);
+  const statusesLoading = useAppSelector((state) => state.leads.statusesLoading);
+  const pipelines = useAppSelector((state) => state.leads.pipelines);
+  const pipelinesError = useAppSelector((state) => state.leads.pipelinesError);
   const activities = useAppSelector((state) => state.leads.activeLeadActivities);
   const notes = useAppSelector((state) => state.leads.activeLeadNotes);
   // Active teammates (names only), readable by every role.
@@ -141,12 +157,18 @@ function LeadsWorkspace() {
   const storageOn = useAppSelector((state) => isFeatureOn(state.features, "storage_enabled"));
   const featuresLoaded = useAppSelector((state) => state.features.isLoaded);
 
-  // Stopgap: the backend isn't seeded for every org yet (empty statuses
-  // list). Fall back to static placeholders so the form isn't blocked; real
-  // data takes over automatically once it exists.
-  const statuses = apiStatuses.length > 0 ? apiStatuses : FALLBACK_LEAD_STATUSES;
-
   const { user } = useAuth();
+
+  // Which board this screen is showing. Every org has at least one pipeline, so
+  // this settles once the list arrives: the member's last one if it still
+  // exists, otherwise the organization's default.
+  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
+  const [pipelineSettingsOpen, setPipelineSettingsOpen] = useState(false);
+  // A move waiting on a reason, because the stage asks for one, and whatever
+  // was due to run once that move went through (the lead form's other fields).
+  const [reasonRequest, setReasonRequest] = useState<StageReasonRequest | null>(null);
+  const pendingAfterMove = useRef<(() => void) | null>(null);
+
   const ownership = ownershipChoices(user?.scopes?.leads, !!user?.teamId);
   const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilter>(ownership[0]);
   const [searchInput, setSearchInput] = useState("");
@@ -171,22 +193,25 @@ function LeadsWorkspace() {
   );
 
   // The same filters go to the list, the board, the export and any bulk action
-  // over "everything matching". Placeholder stages (an org with no pipeline yet)
-  // have no real id, so they are left out.
+  // over "everything matching". `pipeline_id` rides along so all four read the
+  // same board; without it the API would answer for the default one.
   const filters = useMemo(
     () => ({
       search: search.trim() || undefined,
-      status_id: stageFilter !== ALL && /^\d+$/.test(stageFilter) ? stageFilter : undefined,
+      pipeline_id: activePipelineId ?? undefined,
+      status_id: stageFilter !== ALL ? stageFilter : undefined,
       assigned_to: ownerFilter !== ALL ? ownerFilter : undefined,
       priority: priorityFilter !== ALL ? priorityFilter : undefined,
       temperature: temperatureFilter !== ALL ? temperatureFilter : undefined,
       owner: ownershipFilter,
     }),
-    [search, stageFilter, ownerFilter, priorityFilter, temperatureFilter, ownershipFilter],
+    [search, activePipelineId, stageFilter, ownerFilter, priorityFilter, temperatureFilter, ownershipFilter],
   );
 
   // The ownership picker counts as a filter only when the member has narrowed it
-  // past the widest choice their role allows.
+  // past the widest choice their role allows. Picking a board is not filtering,
+  // so `pipeline_id` is left out: an empty board should offer "add a lead",
+  // not "clear filters". The API's own rule matches.
   const hasFilters =
     search.trim() !== "" ||
     stageFilter !== ALL ||
@@ -201,6 +226,9 @@ function LeadsWorkspace() {
     (next: Record<string, string>) => {
       setSearchInput(next.search ?? "");
       setSearch(next.search ?? "");
+      // A view saved on another board switches the board too, or its stage
+      // filter would name a stage this one does not have.
+      if (next.pipeline_id) setActivePipelineId(next.pipeline_id);
       setStageFilter(next.status_id ?? ALL);
       setOwnerFilter(next.assigned_to ?? ALL);
       setPriorityFilter(next.priority ?? ALL);
@@ -232,9 +260,14 @@ function LeadsWorkspace() {
     [view, list.query, list.filters],
   );
 
+  // Held until the board is known, or the first page would be the default
+  // pipeline's and then be replaced a moment later by the remembered one's. If
+  // the pipelines themselves can't be read, the list still loads: the API falls
+  // back to the default board, which beats an empty screen.
   const refreshLeads = useCallback(() => {
+    if (!activePipelineId && !pipelinesError) return;
     dispatch(reqToGetLeads({ data: query }));
-  }, [dispatch, query]);
+  }, [dispatch, query, activePipelineId, pipelinesError]);
 
   useEffect(() => {
     refreshLeads();
@@ -256,12 +289,41 @@ function LeadsWorkspace() {
     list.resetPaging();
   };
 
+  // Switching board starts the list again and drops a stage filter that names a
+  // stage the new board does not have.
+  const changePipeline = (pipelineId: string) => {
+    if (pipelineId === activePipelineId) return;
+    setActivePipelineId(pipelineId);
+    setStageFilter(ALL);
+    list.clearSelection();
+    list.resetPaging();
+  };
+
   useEffect(() => {
-    dispatch(reqToGetLeadStatuses({ data: null }));
+    dispatch(reqToGetPipelines({ data: null }));
     if (canLookupMembers) dispatch(reqToGetMemberOptions({ data: null }));
     if (!featuresLoaded) dispatch(reqToGetFeatures({}));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
+
+  // Settle the board once the pipelines are known, and again if the one being
+  // shown disappears. A remembered id is only trusted while it still exists.
+  useEffect(() => {
+    if (!pipelines.length) return;
+    if (activePipelineId && pipelines.some((pipeline) => pipeline.id === activePipelineId)) return;
+    const remembered = readLastPipeline(user?.id);
+    const fallback = pipelines.find((pipeline) => pipeline.isDefault) ?? pipelines[0];
+    const next = remembered && pipelines.some((pipeline) => pipeline.id === remembered) ? remembered : fallback.id;
+    setActivePipelineId(next);
+  }, [pipelines, activePipelineId, user?.id]);
+
+  // The stage list is always the shown board's, never a mix, so it reloads with
+  // the board. Changing board also drops a stage filter naming the old one.
+  useEffect(() => {
+    if (!activePipelineId) return;
+    dispatch(reqToGetLeadStatuses({ data: { pipeline_id: activePipelineId } }));
+    writeLastPipeline(user?.id, activePipelineId);
+  }, [activePipelineId, dispatch, user?.id]);
 
   useEffect(() => {
     if (!detailLeadId) return;
@@ -282,6 +344,12 @@ function LeadsWorkspace() {
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
   }, [deepLinkLeadId, isLoading, leads, pathname, router, searchParams]);
+
+  const orderedStages = useMemo(
+    () => [...statuses].sort((a: LeadStage, b: LeadStage) => a.sortOrder - b.sortOrder),
+    [statuses],
+  );
+  const bulkStages = orderedStages.filter((stage) => !stage.requiresReason);
 
   const total = pagination?.total ?? leads.length;
   const chosen = selectionCount(list.selection);
@@ -329,7 +397,9 @@ function LeadsWorkspace() {
   };
 
   const handleFormSubmit = (values: LeadFormValues) => {
-    const apiBody = mapLeadPayloadToApi(values);
+    // A new lead joins the board the member is looking at. The stage picker only
+    // offers that board's stages, so the two always agree.
+    const apiBody = mapLeadPayloadToApi({ ...values, pipelineId: activePipelineId ?? undefined });
 
     if (formMode === "create") {
       dispatch(
@@ -357,7 +427,10 @@ function LeadsWorkspace() {
 
     if (!editLead) return;
 
-    const { status_id, ...otherFields } = apiBody;
+    // The stage goes through the dedicated endpoint below, and the board is not
+    // something this form changes, so neither rides along with the other fields:
+    // a `pipeline_id` sent without a stage from that board is refused.
+    const { status_id: _stageId, pipeline_id: _boardId, ...otherFields } = apiBody;
     const stageChanged = editLead.statusId !== values.statusId;
 
     const updateRemainingFields = () => {
@@ -375,14 +448,9 @@ function LeadsWorkspace() {
 
     if (stageChanged) {
       // The dedicated stage endpoint is what writes the "Stage changed"
-      // activity log entry server-side — a plain field PATCH doesn't log it.
-      dispatch(
-        reqToChangeLeadStage({
-          data: { id: editLead.id, status_id },
-          onSuccess: updateRemainingFields,
-          onFailure: failed("Couldn't change lead stage. Please try again."),
-        }),
-      );
+      // activity log entry server-side — a plain field PATCH doesn't log it,
+      // and a stage that requires a reason refuses a plain PATCH outright.
+      moveLeadToStage(editLead.id, values.statusId, updateRemainingFields);
     } else {
       updateRemainingFields();
     }
@@ -434,15 +502,64 @@ function LeadsWorkspace() {
   const handleBulkAssign = (ownerId: string) =>
     runBulk(reqToBulkUpdateLeads, { data: { assigned_to: ownerId } }, `Reassigned ${chosen} lead(s).`, "Couldn't reassign leads. Please try again.");
 
-  const handleMoveLead = (leadId: string, newStatusId: string) => {
+  // Every stage change goes through here, whichever control started it, so the
+  // "require a reason" rule is asked about once and in one place. A stage that
+  // needs one is prompted for before the request goes out; if the API still
+  // refuses (the rule was turned on while this screen was open), the same
+  // prompt opens rather than a toast the member can do nothing with.
+  const submitStageChange = (
+    leadId: string,
+    statusId: string,
+    reason: string | undefined,
+    after?: () => void,
+  ) => {
+    const lead = leads.find((candidate) => candidate.id === leadId);
+    const stage = statuses.find((candidate) => candidate.id === statusId);
     dispatch(
       reqToChangeLeadStage({
-        data: { id: leadId, status_id: newStatusId },
-        onSuccess: refreshLeads,
-        onFailure: failed("Couldn't move lead. Please try again."),
+        data: { id: leadId, status_id: statusId, reason },
+        onSuccess: () => {
+          setReasonRequest(null);
+          if (after) after();
+          else refreshLeads();
+        },
+        onFailure: (error: unknown) => {
+          if (apiErrorCode(error) === "REASON_REQUIRED") {
+            setReasonRequest({
+              leadId,
+              leadName: lead?.fullName ?? "this lead",
+              statusId,
+              stageName: stage?.name ?? "this stage",
+              refused: true,
+            });
+            return;
+          }
+          setReasonRequest(null);
+          failed("Couldn't move lead. Please try again.")(error);
+        },
       }),
     );
   };
+
+  // What `after` is for: the lead form changes the stage first and the rest of
+  // the fields second, so the follow-up edit has to wait for the move.
+  const moveLeadToStage = (leadId: string, statusId: string, after?: () => void) => {
+    const stage = statuses.find((candidate) => candidate.id === statusId);
+    if (stage?.requiresReason) {
+      const lead = leads.find((candidate) => candidate.id === leadId);
+      setReasonRequest({
+        leadId,
+        leadName: lead?.fullName ?? "this lead",
+        statusId,
+        stageName: stage.name,
+      });
+      pendingAfterMove.current = after ?? null;
+      return;
+    }
+    submitStageChange(leadId, statusId, undefined, after);
+  };
+
+  const handleMoveLead = (leadId: string, newStatusId: string) => moveLeadToStage(leadId, newStatusId);
 
   const handleAddActivity = (
     leadId: string,
@@ -544,12 +661,21 @@ function LeadsWorkspace() {
       help: help("stage"),
       render: (row) => {
         const stage = statuses.find((candidate) => candidate.id === row.statusId);
-        return stage ? (
-          <Badge variant="outline" style={{ borderColor: stage.color, color: stage.color }}>
-            {stage.name}
-          </Badge>
-        ) : (
-          "—"
+        if (!stage) return "—";
+        // A closed lead is marked on the row, so the list reads the same as the
+        // board's column badge and the analytics win rate.
+        const outcome = stageOutcome(stage);
+        return (
+          <div className="flex items-center gap-1">
+            <Badge variant="outline" style={{ borderColor: stage.color, color: stage.color }}>
+              {stage.name}
+            </Badge>
+            {outcome && (
+              <Badge variant={outcome === "won" ? "default" : "destructive"} className="text-[10px]">
+                {OUTCOME_LABEL[outcome]}
+              </Badge>
+            )}
+          </div>
         );
       },
     },
@@ -742,6 +868,18 @@ function LeadsWorkspace() {
         </Alert>
       )}
 
+      {activePipelineId && !statusesLoading && statuses.length === 0 && (
+        <Alert>
+          <AlertTitle>This pipeline has no stages</AlertTitle>
+          <AlertDescription>
+            A lead needs a stage to sit in, so no leads can be added here yet.{" "}
+            {canManagePipeline
+              ? "Use the pencil beside the pipeline name to add the first stage."
+              : "Ask an admin to add the stages for this pipeline."}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <HeldLeadsNotice />
 
       <Tabs value={view} onValueChange={(next) => setView(next as ViewMode)}>
@@ -766,8 +904,21 @@ function LeadsWorkspace() {
         />
       )}
 
-      {view !== "analytics" && (
-        <div className="flex flex-wrap items-center gap-2">
+      {/* One toolbar. The pipeline comes first because it decides what every
+          control after it is working on, and it stays on the Analytics tab
+          (which has no filters) because those figures are per pipeline too. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <PipelineSelector
+          pipelines={pipelines}
+          value={activePipelineId}
+          onChange={changePipeline}
+          onEdit={canManagePipeline ? () => setPipelineSettingsOpen(true) : undefined}
+        />
+
+        {view !== "analytics" && (
+          <>
+          <Separator orientation="vertical" className="mx-1 h-6" />
+
           {ownership.length > 1 ? (
             <Select value={ownershipFilter} onValueChange={changeFilter((value: string) => setOwnershipFilter(value as OwnershipFilter))}>
               <SelectTrigger className="w-44" aria-label="Whose leads"><SelectValue /></SelectTrigger>
@@ -794,7 +945,7 @@ function LeadsWorkspace() {
             <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>All Stages</SelectItem>
-              {statuses.map((stage) => (
+              {orderedStages.map((stage) => (
                 <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
               ))}
             </SelectContent>
@@ -836,8 +987,9 @@ function LeadsWorkspace() {
               Clear filters
             </Button>
           )}
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
       {chosen > 0 && view === "list" && canBulk && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/40 p-2">
@@ -845,10 +997,12 @@ function LeadsWorkspace() {
             {allMatching ? `All ${chosen.toLocaleString("en-IN")} matching leads` : `${chosen} selected`}
           </span>
 
+          {/* A stage that needs a reason is left out: one reason cannot speak for
+              a whole batch, so the API refuses a bulk move into it. */}
           <Select onValueChange={handleBulkStageChange}>
             <SelectTrigger className="h-8 w-40"><SelectValue placeholder="Change stage" /></SelectTrigger>
             <SelectContent>
-              {statuses.map((stage) => (
+              {bulkStages.map((stage) => (
                 <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
               ))}
             </SelectContent>
@@ -975,6 +1129,40 @@ function LeadsWorkspace() {
         onConvert={canConvert ? handleConvertLead : undefined}
         attachments={storageOn ? { canUpload: canUpdate, canDelete: canUpdate } : undefined}
       />
+
+      <StageReasonDialog
+        request={reasonRequest}
+        onCancel={() => {
+          pendingAfterMove.current = null;
+          setReasonRequest(null);
+        }}
+        onConfirm={(reason) => {
+          if (!reasonRequest) return;
+          const after = pendingAfterMove.current ?? undefined;
+          pendingAfterMove.current = null;
+          submitStageChange(reasonRequest.leadId, reasonRequest.statusId, reason, after);
+        }}
+      />
+
+      {canManagePipeline && (
+        <PipelineSettingsDialog
+          open={pipelineSettingsOpen}
+          onOpenChange={setPipelineSettingsOpen}
+          activePipelineId={activePipelineId}
+          canManage={canManagePipeline}
+          onChanged={() => {
+            if (activePipelineId) dispatch(reqToGetLeadStatuses({ data: { pipeline_id: activePipelineId } }));
+            refreshLeads();
+          }}
+          // The board being shown has just been removed, so nothing can be read
+          // for it: clearing this lets the pipeline list pick the default again.
+          onPipelineRemoved={() => {
+            setActivePipelineId(null);
+            setStageFilter(ALL);
+            list.clearSelection();
+          }}
+        />
+      )}
     </div>
   );
 }

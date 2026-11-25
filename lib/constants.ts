@@ -21,6 +21,10 @@ export const pageRoutes = {
     setup: "/setup",
     settingsIntegrations: "/settings/integrations",
     settingsBilling: "/settings/billing",
+    // How this organization invoices its own clients: company details, numbering,
+    // tax rates, invoice emails and payment gateway keys. A different thing from
+    // settingsBilling above, which is what OrbitOps charges the organization.
+    settingsBillingSettings: "/settings/billing-settings",
     settingsCompany: "/settings/company",
     settingsNotifications: "/settings/notifications",
     settingsTeamRoles: "/settings/team/roles",
@@ -78,6 +82,7 @@ export const apiRoutes = {
     invitationAccept: "/auth/invitations/accept",
     leads: "/leads",
     leadStatuses: "/leads/statuses",
+    leadPipelines: "/leads/pipelines",
     leadNotes: "/leads/notes",
     leadsExport: "/leads/export",
     contacts: "/contacts",
@@ -95,6 +100,18 @@ export const apiRoutes = {
     // OrbitOps about a different plan (the only write here).
     billingInvoices: "/app/billing/invoices",
     billingUpgradeRequest: "/app/billing/upgrade-request",
+    // The settings behind the invoices the organization sends its own clients.
+    // Tax rates, one template and one gateway take a trailing id, key or provider.
+    billingSettingsCompany: "/app/billing-settings/company",
+    billingSettingsTaxRates: "/app/billing-settings/tax-rates",
+    billingSettingsEmailTemplates: "/app/billing-settings/email-templates",
+    billingSettingsPaymentGateways: "/app/billing-settings/payment-gateways",
+    // Accounting sync: the tenant's own Zoho Books, QuickBooks or Tally. One
+    // connection takes a trailing provider; the Tally voucher file is a download.
+    billingSettingsAccounting: "/app/billing-settings/accounting",
+    billingSettingsAccountingItems: "/app/billing-settings/accounting/sync-items",
+    billingSettingsAccountingSync: "/app/billing-settings/accounting/sync",
+    billingSettingsTallyExport: "/app/billing-settings/accounting/tally/export.xml",
     notifications: "/app/notifications",
     notificationsReadAll: "/app/notifications/read-all",
     // Each member's own choice of which notices they get.

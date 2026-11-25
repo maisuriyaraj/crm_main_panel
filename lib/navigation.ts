@@ -3,6 +3,7 @@ import {
   CreditCard,
   LayoutDashboard,
   Megaphone,
+  ReceiptText,
   UserPlus,
   Users,
   UsersRound,
@@ -43,6 +44,9 @@ export type SettingsLink = {
 export const settingsLinks: SettingsLink[] = [
   { label: "Team", href: pageRoutes.settingsTeam, permission: "team.view" },
   { label: "Billing", href: pageRoutes.settingsBilling, permission: "billing.view" },
+  // `/auth/me` drops the invoices keys while billing_enabled is off, so this one
+  // permission gates the flag and the role together.
+  { label: "Invoice settings", href: pageRoutes.settingsBillingSettings, permission: "invoices.view" },
   { label: "Plan & usage", href: pageRoutes.settingsUsage, permission: null },
   { label: "Security", href: pageRoutes.settingsSecurity, permission: null },
   { label: "Notifications", href: pageRoutes.settingsNotifications, permission: null },
@@ -73,6 +77,9 @@ export const navGroups: NavGroupConfig[] = [
     items: [
       { label: "Team", icon: UsersRound, href: pageRoutes.settingsTeam, permission: "team.view", module: "team" },
       { label: "Billing", icon: CreditCard, href: pageRoutes.settingsBilling, permission: "billing.view", module: "billing" },
+      // How the organization invoices its own clients. Its own invoice screens do
+      // not exist yet, so only the settings page is linked.
+      { label: "Invoice settings", icon: ReceiptText, href: pageRoutes.settingsBillingSettings, permission: "invoices.view", module: "invoices" },
     ],
   },
 ];

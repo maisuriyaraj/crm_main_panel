@@ -11,6 +11,15 @@ export interface LeadOwner {
   fullName: string;
 }
 
+// One board. An organization can run several; every lead sits on exactly one,
+// and a lead's stage always belongs to its own pipeline.
+export interface Pipeline {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  sortOrder: number;
+}
+
 export interface LeadStage {
   id: string;
   name: string;
@@ -18,7 +27,25 @@ export interface LeadStage {
   sortOrder: number;
   isWon?: boolean;
   isLost?: boolean;
+  // Moving a lead into this stage needs a reason, which only the dedicated
+  // stage endpoint accepts — a plain field edit on the lead is refused.
+  requiresReason?: boolean;
 }
+
+// What a stage does to a lead that enters it: nothing, or close it.
+export type StageOutcome = "won" | "lost" | null;
+
+export const stageOutcome = (stage?: LeadStage | null): StageOutcome => {
+  if (!stage) return null;
+  if (stage.isWon) return "won";
+  if (stage.isLost) return "lost";
+  return null;
+};
+
+export const OUTCOME_LABEL: Record<"won" | "lost", string> = {
+  won: "Closed-Won",
+  lost: "Closed-Lost",
+};
 
 export interface Lead {
   id: string;
@@ -39,6 +66,7 @@ export interface Lead {
   probability?: number;
   description?: string;
   statusId: string;
+  pipelineId: string;
   assignedTo?: string;
   tags: string[];
   // Set once this lead has been converted into a contact. Undefined means it has

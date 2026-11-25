@@ -13,6 +13,7 @@ import type {
   LeadPriority,
   LeadStage,
   LeadTemperature,
+  Pipeline,
 } from "@/lib/leads/types";
 
 const toStringId = (value: unknown): string | undefined =>
@@ -43,6 +44,7 @@ export const mapLeadFromApi = (raw: any): Lead => ({
   probability: toNumber(raw.probability),
   description: raw.description ?? undefined,
   statusId: toStringId(raw.status_id) ?? "",
+  pipelineId: toStringId(raw.pipeline_id) ?? "",
   assignedTo: toStringId(raw.assigned_to),
   tags: Array.isArray(raw.tags) ? raw.tags.map((tag: any) => tag.name) : [],
   convertedContactId: toStringId(raw.converted_contact_id),
@@ -57,6 +59,14 @@ export const mapLeadStatusFromApi = (raw: any): LeadStage => ({
   sortOrder: raw.sort_order ?? 0,
   isWon: !!raw.is_won,
   isLost: !!raw.is_lost,
+  requiresReason: !!raw.requires_reason,
+});
+
+export const mapPipelineFromApi = (raw: any): Pipeline => ({
+  id: String(raw.id),
+  name: raw.name,
+  isDefault: !!raw.is_default,
+  sortOrder: raw.sort_order ?? 0,
 });
 
 export const mapLeadActivityFromApi = (raw: any): LeadActivity => ({
@@ -90,6 +100,9 @@ interface LeadFormPayload {
   priority: LeadPriority;
   temperature: LeadTemperature;
   statusId: string;
+  // Which board the lead goes on. The screen supplies the pipeline it is
+  // showing; the API falls back to the organization's default without it.
+  pipelineId?: string;
   assignedTo?: string;
   value?: string;
   probability?: string;
@@ -108,6 +121,7 @@ export const mapLeadPayloadToApi = (values: LeadFormPayload) => ({
   priority: values.priority,
   temperature: values.temperature,
   status_id: values.statusId,
+  pipeline_id: values.pipelineId || undefined,
   assigned_to: values.assignedTo || undefined,
   value: toNumber(values.value),
   probability: toNumber(values.probability),

@@ -7,7 +7,7 @@ import {
   mapLeadNoteFromApi,
   mapLeadStatusFromApi,
 } from "@/lib/leads/mappers";
-import type { Lead, LeadActivity, LeadNote, LeadStage } from "@/lib/leads/types";
+import type { Lead, LeadActivity, LeadNote, LeadStage, Pipeline } from "@/lib/leads/types";
 import { mapEmptyStateFromApi, mapPaginationFromApi, type ListEmptyState, type ListPagination } from "@/lib/lists/types";
 
 interface LeadsState {
@@ -19,6 +19,12 @@ interface LeadsState {
   emptyState: ListEmptyState | null;
   isLoading: boolean;
   error: string | null;
+
+  // The organization's boards, and the one the screen is showing. `statuses`
+  // always holds that one pipeline's stages, never a mix.
+  pipelines: Pipeline[];
+  pipelinesLoading: boolean;
+  pipelinesError: string | null;
 
   statuses: LeadStage[];
   statusesLoading: boolean;
@@ -229,8 +235,11 @@ export const reqToChangeLeadStage = createAsyncThunk<
   "leads/reqToChangeLeadStage",
   async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
     try {
+      // `reason` is only sent when there is one: a stage marked "require a
+      // reason" refuses the move without it, and the rest ignore it.
       const response = await Axios.patch(`${apiRoutes.leads}/${data.id}/stage`, {
         status_id: data.status_id,
+        ...(data.reason ? { reason: data.reason } : {}),
       });
 
       onSuccess?.(response.data);
@@ -394,7 +403,124 @@ export const reqToDeleteLeadNote = createAsyncThunk<
   }
 );
 
-// Pipeline (lead statuses)
+// Pipelines
+
+export const reqToGetPipelines = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToGetPipelines",
+  async ({ onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.get(apiRoutes.leadPipelines);
+
+      onSuccess?.(response.data);
+
+      return (response.data?.data ?? []).map(mapPipelineFromApi);
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to load pipelines",
+      });
+    }
+  }
+);
+
+export const reqToCreatePipeline = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToCreatePipeline",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.post(apiRoutes.leadPipelines, { name: data.name });
+
+      onSuccess?.(response.data);
+
+      return response.data;
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to create pipeline",
+      });
+    }
+  }
+);
+
+export const reqToUpdatePipeline = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToUpdatePipeline",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.patch(`${apiRoutes.leadPipelines}/${data.id}`, { name: data.name });
+
+      onSuccess?.(response.data);
+
+      return response.data;
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to rename pipeline",
+      });
+    }
+  }
+);
+
+export const reqToDeletePipeline = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToDeletePipeline",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.delete(`${apiRoutes.leadPipelines}/${data.id}`);
+
+      onSuccess?.(response.data);
+
+      return { id: data.id, ...response.data };
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to remove pipeline",
+      });
+    }
+  }
+);
+
+export const reqToSetDefaultPipeline = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToSetDefaultPipeline",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.post(`${apiRoutes.leadPipelines}/${data.id}/set-default`);
+
+      onSuccess?.(response.data);
+
+      return response.data;
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to set the default pipeline",
+      });
+    }
+  }
+);
+
+// Stages of one pipeline
 
 export const reqToGetLeadStatuses = createAsyncThunk<
   any,
@@ -402,9 +528,12 @@ export const reqToGetLeadStatuses = createAsyncThunk<
   { rejectValue: { message: string } }
 >(
   "leads/reqToGetLeadStatuses",
-  async ({ onSuccess, onFailure }, { rejectWithValue }) => {
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
     try {
-      const response = await Axios.get(apiRoutes.leadStatuses);
+      // Without a pipeline the API answers for the organization's default one.
+      const response = await Axios.get(apiRoutes.leadStatuses, {
+        params: data?.pipeline_id ? { pipeline_id: data.pipeline_id } : {},
+      });
 
       onSuccess?.(response.data);
 
@@ -582,6 +711,33 @@ const leadsSlice = createSlice({
       });
       builder.addCase(thunk.rejected, (state) => {
         state.notesLoading = false;
+      });
+    });
+
+    builder.addCase(reqToGetPipelines.pending, (state) => {
+      state.pipelinesLoading = true;
+      state.pipelinesError = null;
+    });
+    builder.addCase(reqToGetPipelines.fulfilled, (state, action) => {
+      state.pipelinesLoading = false;
+      state.pipelines = action.payload;
+    });
+    builder.addCase(reqToGetPipelines.rejected, (state, action) => {
+      state.pipelinesLoading = false;
+      state.pipelinesError = action.payload?.message || "An error occurred";
+    });
+
+    [reqToCreatePipeline, reqToUpdatePipeline, reqToDeletePipeline, reqToSetDefaultPipeline].forEach((thunk) => {
+      builder.addCase(thunk.pending, (state) => {
+        state.pipelinesLoading = true;
+        state.pipelinesError = null;
+      });
+      builder.addCase(thunk.fulfilled, (state) => {
+        state.pipelinesLoading = false;
+      });
+      builder.addCase(thunk.rejected, (state, action) => {
+        state.pipelinesLoading = false;
+        state.pipelinesError = action.payload?.message || "An error occurred";
       });
     });
 

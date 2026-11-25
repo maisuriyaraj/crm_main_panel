@@ -19,5 +19,6 @@ leads | specs/leads/leads-ui.md | Leads module screens (List, Kanban, Analytics)
 leads | specs/leads/lead-api-implementation.md | Wires the Leads UI to the real backend API — Redux slice, api routes, snake_case/camelCase mapping — replacing the local demo data. | Implemented
 leads | specs/leads/lead-detail/spec.md | Attachments tab on the lead detail sheet: upload with checks and progress, list, fresh-link download, delete, storage usage and limit message, behind storage_enabled. | Implemented
 tenant-shell | specs/tenant-shell/impersonation/spec.md | SRS 3.8 Tenant impersonation, this project's half: the /impersonate exchange screen and the "OrbitOps support is signed in" banner. | Implemented
+billing | specs/billing/settings-permissions/spec.md | SRS 7.10 Invoice settings screen: company billing details and numbering, tax rates, invoice emails, payment gateway keys, accounting sync; invoice screens themselves not built | Draft
 team | ../docs/specs/team-management-spec.md | Cross-app Team Management: Team page, invitations, accept-invite page, permission-based gating (shared with backend) | Implemented
 bookings | ../docs/bookings/spec.md | Public Book a Demo form on the v2 availability and create endpoints (shared with backend, mst_admin) | Approved

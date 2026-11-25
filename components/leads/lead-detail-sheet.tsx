@@ -83,6 +83,7 @@ export function LeadDetailSheet({
   if (!lead) return null;
 
   const stage = statuses.find((s) => s.id === lead.statusId);
+  const outcome = stageOutcome(stage);
 
   const handleLogActivity = () => {
     if (!activitySubject.trim() || !onAddActivity) return;
@@ -122,6 +123,11 @@ export function LeadDetailSheet({
               <Badge variant="outline" style={{ borderColor: stage.color, color: stage.color }}>
                 {stage.name}
               </Badge>
+            )}
+            {/* A won or lost stage closes the lead. It is a label, not a lock:
+                the lead can still be edited and moved back out. */}
+            {outcome && (
+              <Badge variant={outcome === "won" ? "default" : "destructive"}>{OUTCOME_LABEL[outcome]}</Badge>
             )}
             <Badge variant="secondary" className="capitalize">{lead.priority}</Badge>
             <Badge variant="secondary" className="capitalize">{lead.temperature}</Badge>

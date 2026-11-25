@@ -18,6 +18,7 @@ import adIntegrationsReducer from "./slices/adIntegrationsSlice";
 import usageReducer from "./slices/usageSlice";
 import notificationsReducer from "./slices/notificationsSlice";
 import billingReducer from "./slices/billingSlice";
+import billingSettingsReducer from "./slices/billingSettingsSlice";
 import orgSettingsReducer from "./slices/orgSettingsSlice";
 import notificationPreferencesReducer from "./slices/notificationPreferencesSlice";
 import { onSessionEnded } from "@/lib/auth/session";
@@ -44,6 +45,7 @@ const appReducer = combineReducers({
   usage: usageReducer,
   notifications: notificationsReducer,
   billing: billingReducer,
+  billingSettings: billingSettingsReducer,
   orgSettings: orgSettingsReducer,
   notificationPreferences: notificationPreferencesReducer,
   // Add more reducers here as you create new slices
