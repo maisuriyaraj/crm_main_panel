@@ -6,6 +6,9 @@ import { apiRoutes } from "@/lib/constants";
 // answers only what a connection is and which accounts it can reach.
 
 export type AdProvider = "meta" | "google";
+// What the campaign list is being asked for: one platform, or every connected
+// one at once (the platform switcher's "All").
+export type AdCampaignScope = AdProvider | "all";
 export type AdConnectionStatus = "not_configured" | "not_connected" | "connected" | "expired" | "revoked" | "error";
 
 export interface AdAccount {
@@ -72,6 +75,10 @@ export interface AdCampaignMetrics {
 
 export interface AdCampaign {
     id: string;
+    // Which platform the campaign came from. The API sends it on every row, so
+    // a combined list can label each one without matching ids to a connection.
+    provider: AdProvider;
+    provider_name: string;
     external_id: string;
     name: string | null;
     status: string | null;
@@ -92,13 +99,31 @@ export interface AdCampaignTotals extends Omit<AdCampaignMetrics, "days" | "lead
     leads: number | null;
 }
 
-export interface AdCampaignPage {
+// One platform's state inside the combined list. It comes back with the figures,
+// so the platform switcher knows what is connected without the overview call,
+// which needs the organization settings permission the campaigns route doesn't.
+export interface AdCampaignProviderState {
     provider: AdProvider;
+    provider_name: string;
+    enabled: boolean;
+    connection_status: AdConnectionStatus | "not_enabled";
+    last_synced_at: string | null;
+    last_sync_error: string | null;
+}
+
+export interface AdCampaignPage {
+    provider: AdCampaignScope;
     campaigns: AdCampaign[];
     totals: AdCampaignTotals[];
     range: { from: string; to: string };
+    // On the combined list this is the stalest platform's time, and null while
+    // one of them has never synced: claiming the newest would say the figures
+    // are fresher than some of them are.
     last_synced_at: string | null;
+    // Only meaningful for one platform; the combined list answers "connected"
+    // when at least one platform is, and carries the detail in `providers`.
     connection_status: AdConnectionStatus;
+    providers: AdCampaignProviderState[];
     pagination: { total: number; page: number; limit: number; totalPages: number };
 }
 
@@ -113,6 +138,12 @@ interface AdIntegrationsState {
     campaigns: AdCampaignPage | null;
     campaignsLoading: boolean;
     campaignsError: string | null;
+    // What the platform switcher needs and nothing more: which platforms the
+    // plan allows and which are connected. Kept apart from `providers` because
+    // that comes from the overview call, which needs the organization settings
+    // permission the campaigns screens don't ask for.
+    platformStates: AdCampaignProviderState[];
+    platformStatesLoaded: boolean;
     error: string | null;
 }
 
@@ -126,6 +157,8 @@ const initialState: AdIntegrationsState = {
     campaigns: null,
     campaignsLoading: false,
     campaignsError: null,
+    platformStates: [],
+    platformStatesLoaded: false,
     error: null,
 };
 
@@ -214,12 +247,35 @@ export const reqToSyncAdProvider = createAsyncThunk<
     },
 );
 
+// Just the platform states, for a tab that shows no campaign figures of its own
+// (the unbuilt tabs, and the connections page for a member who may not read the
+// overview). It asks the combined campaign list for a single row, because that
+// is the only answer carrying connection status that needs `ads.view` alone.
+export const reqToGetAdPlatformStates = createAsyncThunk<AdCampaignProviderState[], ThunkArg<null, AdCampaignProviderState[]>, Rejection>(
+    "adIntegrations/reqToGetAdPlatformStates",
+    async ({ onSuccess, onFailure }, { rejectWithValue }) => {
+        try {
+            const body = (await Axios.get(apiRoutes.adCampaignsCombined, { params: { limit: 1 } })).data;
+            const result = (body.providers ?? []) as AdCampaignProviderState[];
+            onSuccess?.(result);
+            return result;
+        } catch (error) {
+            onFailure?.(error);
+            return rejectWithValue(rejectMessage(error, "Couldn't check which ad platforms are connected"));
+        }
+    },
+);
+
 export interface AdCampaignQuery {
-    provider: AdProvider;
+    provider: AdCampaignScope;
     from?: string;
     to?: string;
+    // Only one platform at a time can be asked about an ad account, so the
+    // combined list ignores it.
     accountId?: string;
     status?: string;
+    // Campaign name, a "contains" match the API runs over stored names.
+    search?: string;
     page?: number;
     limit?: number;
 }
@@ -230,24 +286,33 @@ export const reqToGetAdCampaigns = createAsyncThunk<AdCampaignPage, ThunkArg<AdC
     "adIntegrations/reqToGetAdCampaigns",
     async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
         try {
-            const response = await Axios.get(`${apiRoutes.adIntegrations}/${data.provider}/campaigns`, {
+            const combined = data.provider === "all";
+            const url = combined ? apiRoutes.adCampaignsCombined : `${apiRoutes.adIntegrations}/${data.provider}/campaigns`;
+            const response = await Axios.get(url, {
                 params: {
                     ...(data.from ? { from: data.from } : {}),
                     ...(data.to ? { to: data.to } : {}),
-                    ...(data.accountId ? { account_id: data.accountId } : {}),
+                    ...(!combined && data.accountId ? { account_id: data.accountId } : {}),
                     ...(data.status ? { status: data.status } : {}),
+                    ...(data.search ? { search: data.search } : {}),
                     ...(data.page ? { page: data.page } : {}),
                     limit: data.limit ?? 25,
                 },
             });
             const body = response.data;
+            const providers = (body.providers ?? []) as AdCampaignProviderState[];
             const result: AdCampaignPage = {
                 provider: data.provider,
                 campaigns: (body.data ?? []) as AdCampaign[],
                 totals: (body.totals ?? []) as AdCampaignTotals[],
                 range: body.range ?? { from: data.from ?? "", to: data.to ?? "" },
                 last_synced_at: body.last_synced_at ?? null,
-                connection_status: body.connection_status ?? "not_connected",
+                // The combined list has no single connection: it is "connected"
+                // when any platform is, so the empty table says the right thing.
+                connection_status: combined
+                    ? (providers.some((entry) => entry.connection_status === "connected") ? "connected" : "not_connected")
+                    : body.connection_status ?? "not_connected",
+                providers,
                 pagination: body.pagination ?? { total: 0, page: 1, limit: data.limit ?? 25, totalPages: 0 },
             };
             onSuccess?.(result);
@@ -258,6 +323,17 @@ export const reqToGetAdCampaigns = createAsyncThunk<AdCampaignPage, ThunkArg<AdC
         }
     },
 );
+
+// The overview says the same things about a platform in its own shape, so the
+// switcher can be fed from either call.
+const platformStateOf = (entry: AdProviderState): AdCampaignProviderState => ({
+    provider: entry.provider,
+    provider_name: entry.name,
+    enabled: entry.enabled,
+    connection_status: !entry.enabled ? "not_enabled" : entry.status,
+    last_synced_at: entry.connection?.last_synced_at ?? null,
+    last_sync_error: entry.connection?.last_sync_error ?? null,
+});
 
 const adIntegrationsSlice = createSlice({
     name: "adIntegrations",
@@ -273,6 +349,8 @@ const adIntegrationsSlice = createSlice({
             state.error = null;
             state.providers = action.payload.providers;
             state.isLoaded = true;
+            state.platformStates = action.payload.providers.map(platformStateOf);
+            state.platformStatesLoaded = true;
         });
         builder.addCase(reqToGetAdIntegrations.rejected, (state, action) => {
             state.isLoading = false;
@@ -296,6 +374,10 @@ const adIntegrationsSlice = createSlice({
                 state.pending = null;
                 state.providers = action.payload.providers;
                 state.isLoaded = true;
+                // Disconnecting must put that platform back to "Connect" in the
+                // switcher straight away, not at the next page load.
+                state.platformStates = action.payload.providers.map(platformStateOf);
+                state.platformStatesLoaded = true;
             });
         }
 
@@ -309,6 +391,8 @@ const adIntegrationsSlice = createSlice({
             state.syncing = null;
             state.providers = action.payload.providers;
             state.isLoaded = true;
+            state.platformStates = action.payload.providers.map(platformStateOf);
+            state.platformStatesLoaded = true;
             state.lastSync = { provider: action.payload.provider, result: action.payload.sync };
         });
         builder.addCase(reqToSyncAdProvider.rejected, (state, action) => {
@@ -324,10 +408,25 @@ const adIntegrationsSlice = createSlice({
             state.campaignsLoading = false;
             state.campaignsError = null;
             state.campaigns = action.payload;
+            // The combined answer already carries every platform's state, so
+            // the switcher never needs its own request on this tab.
+            if (action.payload.providers.length) {
+                state.platformStates = action.payload.providers;
+                state.platformStatesLoaded = true;
+            }
         });
         builder.addCase(reqToGetAdCampaigns.rejected, (state, action) => {
             state.campaignsLoading = false;
             state.campaignsError = action.payload?.message || "An error occurred";
+        });
+
+        // A switcher that cannot be told what is connected is left as it is
+        // rather than showing every platform as unavailable.
+        builder.addCase(reqToGetAdPlatformStates.fulfilled, (state, action) => {
+            if (action.payload.length) {
+                state.platformStates = action.payload;
+                state.platformStatesLoaded = true;
+            }
         });
     },
 });

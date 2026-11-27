@@ -33,10 +33,16 @@ export const pageRoutes = {
     contacts: "/contacts",
     // Ads Manager. Overview is where ad platforms are connected and where a
     // "connect again" notice links back to; Campaigns shows what the hourly sync
-    // pulled back. The other tabs in the SRS (Ad Sets, Creatives, Audiences, A/B
-    // testing, Analytics) have no page yet and so no route here.
+    // pulled back. The last five are the Ad Manager's other tabs: each page
+    // exists and says the feature is still to come, because a tab the product
+    // asks for must lead somewhere rather than to a not-found page.
     adsManager: "/ads-manager",
     adsManagerCampaigns: "/ads-manager/campaigns",
+    adsManagerAdSets: "/ads-manager/ad-sets",
+    adsManagerCreatives: "/ads-manager/creatives",
+    adsManagerAudiences: "/ads-manager/audiences",
+    adsManagerAbTesting: "/ads-manager/ab-testing",
+    adsManagerAnalytics: "/ads-manager/analytics",
 }
 
 // Joins an org id/slug with a pageRoutes value. `route` already carries its
@@ -148,4 +154,7 @@ export const apiRoutes = {
     // ("/{provider}/connect", "/{provider}/accounts", "/{provider}",
     // "/{provider}/sync", "/{provider}/campaigns").
     adIntegrations: "/app/integrations/ads",
+    // Every connected platform's campaigns in one list, for the platform
+    // switcher's "All" option.
+    adCampaignsCombined: "/app/integrations/ads/campaigns",
 }

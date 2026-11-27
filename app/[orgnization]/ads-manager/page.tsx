@@ -3,14 +3,12 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { BarChart3, Megaphone } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import { useAppSelector } from "@/lib/store/hooks";
 import { isFeatureOn } from "@/lib/store/slices/featuresSlice";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { NoAccess } from "@/components/auth/no-access";
 import { AdIntegrationsPanel, callbackMessage } from "@/components/integrations/ad-integrations-panel";
 import { AdReconnectBanner } from "@/components/ads/reconnect-banner";
@@ -24,12 +22,13 @@ export default function AdsManagerPage() {
   );
 }
 
-// Ads Manager overview: which ad platforms are connected, which need connecting
-// again, and what the hourly sync last managed to fetch.
+// The Connections tab: which ad platforms are connected, which need connecting
+// again, and what the hourly sync last managed to fetch. It is where the
+// platform switcher's "Connect" links and every "connect again" notice point.
 //
-// Reading a connection needs `ads.view` and `organization.settings.manage`, which
-// is what the API checks, so a member with only `ads.view` is told where the
-// figures are instead of being shown an empty screen and a failed request.
+// Reading a connection needs `ads.view` and `organization.settings.manage`,
+// which is what the API checks, so a member with only `ads.view` is told where
+// the figures are instead of being shown an empty screen and a failed request.
 function AdsManagerOverview() {
   const { can, canAll } = useAuth();
   const params = useParams<{ orgnization: string }>();
@@ -47,23 +46,7 @@ function AdsManagerOverview() {
   if (!can("ads.view")) return <NoAccess title="Ads Manager" area="Ads Manager" module="ads" />;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold">
-            <Megaphone className="size-6 text-primary" aria-hidden /> Ads Manager
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            Connect your ad platforms, then see what your campaigns are doing.
-          </p>
-        </div>
-        <Button variant="outline" asChild>
-          <Link href={campaignsHref}>
-            <BarChart3 aria-hidden /> View campaigns
-          </Link>
-        </Button>
-      </div>
-
+    <div className="space-y-6">
       {result && (
         <Alert variant={result.ok ? "default" : "destructive"} role="status">
           <AlertDescription>{result.text}</AlertDescription>

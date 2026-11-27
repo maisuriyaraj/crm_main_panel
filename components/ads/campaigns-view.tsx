@@ -6,22 +6,21 @@ import { useParams } from "next/navigation";
 import { CircleAlert } from "lucide-react";
 
 import { useAuth } from "@/hooks/useAuth";
+import { useAdManagerQuery, type AdPlatformKey } from "@/hooks/useAdManagerQuery";
 import { buildOrgRoute, pageRoutes } from "@/lib/constants";
 import {
-  RANGE_LABELS,
   describeAgo,
   formatCount,
   formatDay,
   formatMoneyMinor,
   formatPercent,
-  rangeForPreset,
-  type AdDateRange,
-  type AdRangePreset,
 } from "@/lib/ads/format";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import {
   reqToGetAdCampaigns,
   type AdCampaign,
+  type AdCampaignProviderState,
+  type AdCampaignScope,
   type AdCampaignTotals,
   type AdProvider,
 } from "@/lib/store/slices/adIntegrationsSlice";
@@ -30,10 +29,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdRefreshButton } from "@/components/ads/refresh-button";
 
 const PAGE_SIZE = 25;
@@ -59,27 +56,43 @@ const statusWord = (status: string | null) => (status ? STATUS_WORDS[status] ?? 
 const statusVariant = (status: string | null): "secondary" | "outline" | "destructive" =>
   status === "active" || status === "enabled" ? "secondary" : status === "with_issues" ? "destructive" : "outline";
 
-// Campaigns and their figures for one platform. Everything here comes from what
-// the hourly sync already stored, so no ad platform is called to draw the page.
-export function AdCampaignsView({
-  platforms,
-  initialProvider,
-}: {
-  platforms: { provider: AdProvider; name: string }[];
-  initialProvider?: AdProvider;
-}) {
+// Campaigns and their figures. Which platform, which date range and which
+// search term come from the Ad Manager header through the URL, so this tab and
+// the header can never be showing different things.
+//
+// Everything here comes from what the hourly sync already stored, so no ad
+// platform is called to draw the page.
+export function AdCampaignsView({ platforms }: { platforms: { provider: AdProvider; name: string }[] }) {
   const dispatch = useAppDispatch();
   const params = useParams<{ orgnization: string }>();
   const { canAll } = useAuth();
   const canRefresh = canAll(["ads.manage", "organization.settings.manage"]);
-  const { campaigns, campaignsLoading, campaignsError } = useAppSelector((state) => state.adIntegrations);
+  const { campaigns, campaignsLoading, campaignsError, platformStates } = useAppSelector((state) => state.adIntegrations);
+  const { platform, range, search, page, setPage } = useAdManagerQuery();
 
-  const [provider, setProvider] = useState<AdProvider>(initialProvider ?? platforms[0]?.provider ?? "meta");
-  const [preset, setPreset] = useState<AdRangePreset>("30d");
-  const [range, setRange] = useState<AdDateRange>(() => rangeForPreset("30d"));
-  const [accountId, setAccountId] = useState<string>(ALL);
-  const [status, setStatus] = useState<string>(ALL);
-  const [page, setPage] = useState(1);
+  // Both filters belong to one platform: an ad account id means nothing to
+  // another platform, and a status is the platform's own word, so Google's
+  // "enabled" would match no Meta campaign. They are therefore remembered
+  // together with the platform they were chosen for, and read back as "any"
+  // once the platform has moved on — rather than being cleared afterwards,
+  // which would leave one render asking the new platform for the old filter.
+  const [chosen, setChosen] = useState<{ platform: AdPlatformKey; accountId: string; status: string }>({
+    platform,
+    accountId: ALL,
+    status: ALL,
+  });
+  const mine = chosen.platform === platform;
+  const accountId = mine ? chosen.accountId : ALL;
+  const status = mine ? chosen.status : ALL;
+  const choose = (change: { accountId?: string; status?: string }) => {
+    setChosen({ platform, accountId, status, ...change });
+    setPage(1);
+  };
+
+  // WhatsApp is not a connection of its own: Click-to-WhatsApp ads are Meta ads,
+  // so choosing it reads the Meta figures and says so.
+  const scope: AdCampaignScope = platform === "all" ? "all" : platform === "whatsapp" ? "meta" : platform;
+  const combined = scope === "all";
 
   // One request builder for both the automatic load and Try again / after a
   // refresh, so the three can never ask for different things.
@@ -87,34 +100,43 @@ export function AdCampaignsView({
     dispatch(
       reqToGetAdCampaigns({
         data: {
-          provider,
+          provider: scope,
           from: range.from,
           to: range.to,
-          accountId: accountId === ALL ? undefined : accountId,
+          accountId: combined || accountId === ALL ? undefined : accountId,
           status: status === ALL ? undefined : status,
+          search: search || undefined,
           page,
           limit: PAGE_SIZE,
         },
       }),
     );
-  }, [dispatch, provider, range.from, range.to, accountId, status, page]);
+  }, [dispatch, scope, combined, range.from, range.to, accountId, status, search, page]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Only ever the platform on screen: the store holds one page at a time, so a
-  // page belonging to the other tab is ignored rather than shown under it. Held
-  // in a memo because the filter options below are worked out from it.
-  const rows: AdCampaign[] = useMemo(
-    () => (campaigns?.provider === provider ? campaigns.campaigns : []),
-    [campaigns, provider],
-  );
-  const totals: AdCampaignTotals[] = campaigns?.provider === provider ? campaigns.totals : [];
-  const pagination = campaigns?.provider === provider ? campaigns.pagination : null;
-  const connectionStatus = campaigns?.provider === provider ? campaigns.connection_status : null;
-  const lastSyncedAt = campaigns?.provider === provider ? campaigns.last_synced_at : null;
-  const platformName = platforms.find((entry) => entry.provider === provider)?.name ?? provider;
+  // Only ever what is on screen: the store holds one page at a time, so a page
+  // belonging to another platform is ignored rather than shown under this one.
+  const forThisScope = campaigns?.provider === scope;
+  const rows: AdCampaign[] = useMemo(() => (forThisScope ? campaigns!.campaigns : []), [forThisScope, campaigns]);
+  const totals: AdCampaignTotals[] = forThisScope ? campaigns!.totals : [];
+  const pagination = forThisScope ? campaigns!.pagination : null;
+  const connectionStatus = forThisScope ? campaigns!.connection_status : null;
+  const lastSyncedAt = forThisScope ? campaigns!.last_synced_at : null;
+
+  const platformName = combined
+    ? "All platforms"
+    : platform === "whatsapp"
+      ? "WhatsApp"
+      : platforms.find((entry) => entry.provider === scope)?.name ?? scope;
+
+  // On the combined list every platform's state arrives with the figures; on one
+  // platform's list the switcher's own check is what we have.
+  const states: AdCampaignProviderState[] = forThisScope && campaigns!.providers.length ? campaigns!.providers : platformStates;
+  const broken = states.filter((entry) => entry.connection_status === "expired" || entry.connection_status === "error");
+  const connectedCount = states.filter((entry) => entry.connection_status === "connected").length;
 
   // The filters are built from the rows on the page, which is all the API offers
   // here; an account with no campaigns in the range simply isn't listed.
@@ -126,19 +148,10 @@ export function AdCampaignsView({
     return [...seen.entries()].map(([id, name]) => ({ id, name }));
   }, [rows]);
 
-  const statusOptions = useMemo(() => [...new Set(rows.map((row) => row.status).filter((value): value is string => !!value))], [rows]);
-
-  const changePreset = (next: AdRangePreset) => {
-    setPreset(next);
-    setPage(1);
-    if (next !== "custom") setRange(rangeForPreset(next));
-  };
-
-  const changeRange = (key: "from" | "to", value: string) => {
-    setPreset("custom");
-    setPage(1);
-    setRange((current) => ({ ...current, [key]: value }));
-  };
+  const statusOptions = useMemo(
+    () => [...new Set(rows.map((row) => row.status).filter((value): value is string => !!value))],
+    [rows],
+  );
 
   const columns: DataTableColumn<AdCampaign>[] = [
     {
@@ -148,7 +161,15 @@ export function AdCampaignsView({
         <div className="min-w-0">
           <p className="font-medium">{row.name || row.external_id}</p>
           <p className="text-xs text-muted-foreground">
-            {[row.objective ? row.objective.replace(/_/g, " ") : null, row.account?.name || row.account?.id].filter(Boolean).join(" · ")}
+            {[
+              // Which platform a row came from only needs saying when the list
+              // holds more than one.
+              combined ? row.provider_name : null,
+              row.objective ? row.objective.replace(/_/g, " ") : null,
+              row.account?.name || row.account?.id,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         </div>
       ),
@@ -180,21 +201,23 @@ export function AdCampaignsView({
     },
   ];
 
-  const needsReconnect = connectionStatus === "expired" || connectionStatus === "error";
+  const connectionsHref = buildOrgRoute(params?.orgnization ?? "", pageRoutes.adsManager);
+  const singleNeedsReconnect = !combined && (connectionStatus === "expired" || connectionStatus === "error");
 
   return (
     <div className="space-y-5">
-      {platforms.length > 1 && (
-        <Tabs value={provider} onValueChange={(value) => { setProvider(value as AdProvider); setPage(1); setAccountId(ALL); setStatus(ALL); }}>
-          <TabsList>
-            {platforms.map((entry) => (
-              <TabsTrigger key={entry.provider} value={entry.provider}>{entry.name}</TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      {platform === "whatsapp" && (
+        <Alert role="status">
+          <AlertDescription>
+            <p>
+              Click-to-WhatsApp ads are Meta ads, so these are your Meta campaigns. OrbitOps can&apos;t
+              yet tell which of them send people to WhatsApp — that comes with the WhatsApp ads feature.
+            </p>
+          </AlertDescription>
+        </Alert>
       )}
 
-      {needsReconnect && (
+      {singleNeedsReconnect && (
         <Alert variant="destructive" role="status">
           <CircleAlert aria-hidden />
           <AlertTitle>{platformName} needs connecting again</AlertTitle>
@@ -202,7 +225,7 @@ export function AdCampaignsView({
             <p>
               These figures are the last ones OrbitOps could fetch, and no new ones will arrive until
               the platform is connected again.{" "}
-              <Link className="underline" href={buildOrgRoute(params?.orgnization ?? "", pageRoutes.adsManager)}>
+              <Link className="underline" href={connectionsHref}>
                 Connect again in Ads Manager
               </Link>
             </p>
@@ -210,13 +233,46 @@ export function AdCampaignsView({
         </Alert>
       )}
 
-      {connectionStatus === "not_connected" && (
+      {/* On the combined list a broken platform is one of several, so it is
+          named: the rest of the figures on screen are still current. */}
+      {combined && broken.length > 0 && (
+        <Alert variant="destructive" role="status">
+          <CircleAlert aria-hidden />
+          <AlertTitle>
+            {broken.map((entry) => entry.provider_name).join(" and ")} {broken.length > 1 ? "need" : "needs"} connecting again
+          </AlertTitle>
+          <AlertDescription>
+            <p>
+              Those platforms&apos; figures are the last ones OrbitOps could fetch. The others are up to
+              date.{" "}
+              <Link className="underline" href={connectionsHref}>
+                Connect again in Ads Manager
+              </Link>
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!combined && connectionStatus === "not_connected" && (
         <Alert role="status">
           <AlertDescription>
             <p>
               {platformName} isn&apos;t connected yet, so there are no campaigns to show.{" "}
-              <Link className="underline" href={buildOrgRoute(params?.orgnization ?? "", pageRoutes.adsManager)}>
+              <Link className="underline" href={connectionsHref}>
                 Connect it in Ads Manager
+              </Link>
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {combined && connectedCount === 0 && states.length > 0 && (
+        <Alert role="status">
+          <AlertDescription>
+            <p>
+              No ad platform is connected yet, so there are no campaigns to show.{" "}
+              <Link className="underline" href={connectionsHref}>
+                Connect one in Ads Manager
               </Link>
             </p>
           </AlertDescription>
@@ -225,34 +281,19 @@ export function AdCampaignsView({
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="ads-range">Date range</Label>
-            <Select value={preset} onValueChange={(value) => changePreset(value as AdRangePreset)}>
-              <SelectTrigger id="ads-range" className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(Object.keys(RANGE_LABELS) as AdRangePreset[]).map((key) => (
-                  <SelectItem key={key} value={key}>{RANGE_LABELS[key]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="ads-from">From</Label>
-            <Input id="ads-from" type="date" className="w-40" value={range.from} max={range.to} onChange={(event) => changeRange("from", event.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="ads-to">To</Label>
-            <Input id="ads-to" type="date" className="w-40" value={range.to} min={range.from} onChange={(event) => changeRange("to", event.target.value)} />
-          </div>
-          {accountOptions.length > 1 && (
+          {!combined && accountOptions.length > 1 && (
             <div className="space-y-1">
               <Label htmlFor="ads-account">Ad account</Label>
-              <Select value={accountId} onValueChange={(value) => { setAccountId(value); setPage(1); }}>
-                <SelectTrigger id="ads-account" className="w-48"><SelectValue /></SelectTrigger>
+              <Select value={accountId} onValueChange={(value) => choose({ accountId: value })}>
+                <SelectTrigger id="ads-account" className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>All accounts</SelectItem>
                   {accountOptions.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>{account.name}</SelectItem>
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -261,31 +302,57 @@ export function AdCampaignsView({
           {statusOptions.length > 1 && (
             <div className="space-y-1">
               <Label htmlFor="ads-status">Status</Label>
-              <Select value={status} onValueChange={(value) => { setStatus(value); setPage(1); }}>
-                <SelectTrigger id="ads-status" className="w-40"><SelectValue /></SelectTrigger>
+              <Select value={status} onValueChange={(value) => choose({ status: value })}>
+                <SelectTrigger id="ads-status" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL}>Any status</SelectItem>
                   {statusOptions.map((value) => (
-                    <SelectItem key={value} value={value}>{statusWord(value)}</SelectItem>
+                    <SelectItem key={value} value={value}>
+                      {statusWord(value)}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           )}
+          {search && (
+            <p className="pb-2 text-xs text-muted-foreground">
+              Showing campaigns matching &ldquo;{search}&rdquo;.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs text-muted-foreground">
+            {/* Across platforms this is the stalest one's time, so the line
+                never claims figures are fresher than some of them are. */}
             Figures last updated {describeAgo(lastSyncedAt)}
             <span className="block">Updated automatically every hour.</span>
           </p>
-          <AdRefreshButton
-            provider={provider}
-            name={platformName}
-            lastSyncedAt={lastSyncedAt}
-            canRefresh={canRefresh}
-            onSynced={load}
-          />
+          {combined ? (
+            states
+              .filter((entry) => entry.connection_status !== "not_enabled" && entry.connection_status !== "not_connected" && entry.connection_status !== "not_configured")
+              .map((entry) => (
+                <AdRefreshButton
+                  key={entry.provider}
+                  provider={entry.provider}
+                  name={entry.provider_name}
+                  lastSyncedAt={entry.last_synced_at}
+                  canRefresh={canRefresh}
+                  onSynced={load}
+                />
+              ))
+          ) : (
+            <AdRefreshButton
+              provider={scope as AdProvider}
+              name={platformName}
+              lastSyncedAt={lastSyncedAt}
+              canRefresh={canRefresh}
+              onSynced={load}
+            />
+          )}
         </div>
       </div>
 
@@ -309,7 +376,9 @@ export function AdCampaignsView({
       )}
       {totals.length > 1 && (
         <p className="text-xs text-muted-foreground">
-          Your ad accounts bill in different currencies, so the figures are kept apart rather than added together.
+          {combined
+            ? "These platforms bill in different currencies, so the figures are kept apart rather than added together."
+            : "Your ad accounts bill in different currencies, so the figures are kept apart rather than added together."}
         </p>
       )}
 
@@ -318,7 +387,9 @@ export function AdCampaignsView({
           <Alert variant="destructive" role="status">
             <AlertDescription>{campaignsError}</AlertDescription>
           </Alert>
-          <Button variant="outline" onClick={load}>Try again</Button>
+          <Button variant="outline" onClick={load}>
+            Try again
+          </Button>
         </div>
       ) : (
         <DataTable
@@ -328,9 +399,11 @@ export function AdCampaignsView({
           pageSize={PAGE_SIZE}
           isLoading={campaignsLoading}
           emptyMessage={
-            connectionStatus === "connected"
-              ? `No ${platformName} campaigns with results between ${formatDay(range.from)} and ${formatDay(range.to)}.`
-              : "No campaigns to show yet."
+            search
+              ? `No campaigns matching "${search}" between ${formatDay(range.from)} and ${formatDay(range.to)}.`
+              : connectionStatus === "connected"
+                ? `No ${combined ? "" : `${platformName} `}campaigns with results between ${formatDay(range.from)} and ${formatDay(range.to)}.`
+                : "No campaigns to show yet."
           }
           manual={{
             total: pagination?.total ?? 0,

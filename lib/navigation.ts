@@ -63,9 +63,11 @@ export const navGroups: NavGroupConfig[] = [
     ],
   },
   {
-    // Only the two Ads pages that exist. The SRS also lists Ad Sets, Creatives,
-    // Audiences, A/B testing and Analytics tabs; each gets its nav entry when its
-    // own page is built, so nothing here leads to a not-found page.
+    // The two Ads pages with data behind them. The Ad Manager's other tabs
+    // (Ad Sets, Creatives, Audiences, A/B testing, Analytics) are reached from
+    // the tab strip inside the Ad Manager, not from here: their pages exist but
+    // only say the feature is still to come, and a sidebar full of those would
+    // promise more than the product does.
     label: "Advertising",
     items: [
       { label: "Ads Manager", icon: Megaphone, href: pageRoutes.adsManager, permission: "ads.view", module: "ads" },
