@@ -60,6 +60,15 @@ export const API_ERROR_MESSAGES: Record<string, string> = {
     PIPELINE_NAME_TAKEN: "A pipeline with this name already exists. Choose another name.",
     STAGE_NOT_IN_PIPELINE: "That stage belongs to a different pipeline. Pick a stage from this one.",
     REASON_REQUIRED: "This stage needs a reason before a lead can move into it.",
+    // Lead sources, channels and tenant-defined lead fields
+    SOURCE_IN_USE: "Some leads still use this source, so it can't be removed. Switch it off instead — it stays on those leads but is no longer offered on new ones.",
+    CHANNEL_IN_USE: "Some leads still use this channel, so it can't be removed. Switch it off instead — it stays on those leads but is no longer offered on new ones.",
+    NAME_TAKEN: "Something with this name already exists here. Choose another name.",
+    FIELD_KEY_TAKEN: "A lead field with this key already exists. Choose another key.",
+    UNKNOWN_CUSTOM_FIELD: "One of these fields no longer exists. Reload the page and try again.",
+    // Adding a lead that matches an existing one, and bringing a deleted one back
+    DUPLICATE_LEAD: "A lead with this email or mobile already exists.",
+    RESTORE_PERIOD_OVER: "This lead was deleted more than 30 days ago, so it can no longer be restored.",
     // Exports
     EXPORT_TOO_LARGE: "This export has more than 10,000 rows. Narrow the filters and try again.",
     // Session and subscription

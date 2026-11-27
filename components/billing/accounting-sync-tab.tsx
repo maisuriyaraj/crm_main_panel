@@ -197,12 +197,16 @@ function ConnectionCard({
   const [settings, setSettings] = useState<Record<string, string>>(() => settingsToForm(connection));
   const [disconnecting, setDisconnecting] = useState(false);
 
-  // A save answers with the stored connection, so the form follows what was kept.
-  useEffect(() => {
+  // A save answers with the stored connection, so the form follows what was kept, and
+  // the credential boxes are emptied because what was typed is now stored. Done while
+  // rendering, which is how React asks for state to be reset from a changed prop.
+  const [builtFrom, setBuiltFrom] = useState(connection);
+  if (builtFrom !== connection) {
+    setBuiltFrom(connection);
     setOrgId(connection.externalOrgId ?? "");
     setSettings(settingsToForm(connection));
     setCredentials({});
-  }, [connection]);
+  }
 
   const isFile = connection.kind === "file";
   const failed = connection.counts.failed ?? 0;

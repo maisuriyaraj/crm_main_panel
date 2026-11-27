@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 
 import { apiErrorMessage } from "@/lib/auth/errors";
@@ -77,11 +77,14 @@ function TemplateCard({
   const [subject, setSubject] = useState(template.subject);
   const [body, setBody] = useState(template.body);
 
-  // A save or a reset answers with the stored wording, so the boxes follow it.
-  useEffect(() => {
+  // A save or a reset answers with the stored wording, so the boxes follow it. Done
+  // while rendering, which is how React asks for state to be reset from a changed prop.
+  const [builtFrom, setBuiltFrom] = useState(template);
+  if (builtFrom.subject !== template.subject || builtFrom.body !== template.body) {
+    setBuiltFrom(template);
     setSubject(template.subject);
     setBody(template.body);
-  }, [template.subject, template.body]);
+  }
 
   const changed = subject !== template.subject || body !== template.body;
 

@@ -6,7 +6,16 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { resolveOwnerName, type Lead, type LeadOwner } from "@/lib/leads/types";
+import { CALL_STATUS_LABEL, hasNoName, leadDisplayName, resolveOwnerName, type Lead, type LeadOwner } from "@/lib/leads/types";
+
+// The coloured call indicator (LD-A6): green answered, yellow a follow-up is
+// pending, red not answered, grey never called.
+const CALL_DOT: Record<Lead["lastCallStatus"], string> = {
+  answered: "bg-chart-2",
+  follow_up: "bg-chart-4",
+  not_answered: "bg-destructive",
+  none: "bg-muted-foreground",
+};
 
 const TEMPERATURE_DOT: Record<Lead["temperature"], string> = {
   hot: "bg-destructive",
@@ -49,15 +58,29 @@ export function KanbanCard({ lead, owners, onOpen, dragOverlay }: KanbanCardProp
       <CardContent className="space-y-2 px-3">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p className="text-sm font-medium leading-tight">{lead.fullName}</p>
+            {/* A lead needs only one of a name, an email or a mobile, so some
+                have no name; the card says so rather than showing nothing. */}
+            <p className={cn("text-sm font-medium leading-tight", hasNoName(lead) && "font-normal text-muted-foreground")}>
+              {leadDisplayName(lead)}
+            </p>
             {lead.companyName && (
-              <p className="text-xs text-muted-foreground">{lead.companyName}</p>
+              <p className="truncate text-xs text-muted-foreground" title={lead.companyName}>
+                {lead.companyName}
+              </p>
             )}
           </div>
-          <span
-            className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", TEMPERATURE_DOT[lead.temperature])}
-            title={`${lead.temperature} lead`}
-          />
+          <div className="mt-1 flex shrink-0 items-center gap-1">
+            {lead.mobile && (
+              <span
+                className={cn("h-2 w-2 rounded-full", CALL_DOT[lead.lastCallStatus ?? "none"])}
+                title={CALL_STATUS_LABEL[lead.lastCallStatus ?? "none"]}
+              />
+            )}
+            <span
+              className={cn("h-2 w-2 rounded-full", TEMPERATURE_DOT[lead.temperature])}
+              title={`${lead.temperature} lead`}
+            />
+          </div>
         </div>
 
         {typeof lead.value === "number" && (

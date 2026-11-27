@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Phone, Plus, Settings2 } from "lucide-react";
 
 import { notify } from "@/lib/commonFunctions";
+import { cn } from "@/lib/utils";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { useAuth } from "@/hooks/useAuth";
 import { useCreateFromUrl } from "@/hooks/useCreateFromUrl";
@@ -18,8 +19,12 @@ import {
   reqToCreateLeadNote,
   reqToDeleteLead,
   reqToDeleteLeadNote,
+  reqToGetLead,
   reqToGetLeadActivities,
+  reqToGetLeadChannels,
+  reqToGetLeadCustomFields,
   reqToGetLeadNotes,
+  reqToGetLeadSources,
   reqToGetLeadStatuses,
   reqToGetLeads,
   reqToGetPipelines,
@@ -29,13 +34,20 @@ import {
 import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
 import { isFeatureOn, reqToGetFeatures } from "@/lib/store/slices/featuresSlice";
 import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
-import { mapLeadPayloadToApi } from "@/lib/leads/mappers";
+import { mapDuplicateResultFromApi, mapLeadFromApi, mapLeadPayloadToApi } from "@/lib/leads/mappers";
 import {
+  CALL_STATUS_LABEL,
+  LIFECYCLE_LABEL,
   OUTCOME_LABEL,
+  hasNoName,
+  leadDisplayName,
   resolveOwnerName,
   stageOutcome,
+  type DuplicateLeadResult,
   type Lead,
   type LeadActivityType,
+  type LeadCallStatus,
+  type LeadLifecycle,
   type LeadStage,
 } from "@/lib/leads/types";
 import { readLastPipeline, writeLastPipeline } from "@/lib/leads/last-pipeline";
@@ -65,7 +77,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { LeadFormDialog, type LeadFormValues } from "@/components/leads/lead-form-dialog";
+import { LeadFormDialog, customFieldsForApi, type LeadFormValues } from "@/components/leads/lead-form-dialog";
+import { LeadSettingsDialog } from "@/components/leads/lead-settings-dialog";
+import { DuplicateLeadDialog } from "@/components/leads/duplicate-lead-dialog";
+import { DeletedLeadsView } from "@/components/leads/deleted-leads-view";
 import { KanbanBoard } from "@/components/leads/kanban-board";
 import { PipelineSelector } from "@/components/leads/pipeline-selector";
 import { PipelineSettingsDialog } from "@/components/leads/pipeline-settings-dialog";
@@ -85,7 +100,7 @@ import { useUsage } from "@/hooks/useUsage";
 import { formatCount, leadsFull, limitRefusalFrom } from "@/lib/usage/mappers";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-type ViewMode = "list" | "kanban" | "analytics";
+type ViewMode = "list" | "kanban" | "analytics" | "deleted";
 
 const LIST_KEY = "leads";
 
@@ -115,6 +130,27 @@ const ownershipChoices = (scope: "own" | "team" | "all" | undefined, hasTeam: bo
 };
 
 const dateCell = (value?: string) => (value ? new Date(value).toLocaleDateString("en-IN") : "—");
+const momentCell = (value?: string) =>
+  value
+    ? new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "—";
+
+// Active / Closed / Dead, which the API reads from the stage rather than
+// storing. Shown as a badge and offered as LD-F2's quick filter.
+const LIFECYCLE_VARIANT: Record<LeadLifecycle, "outline" | "default" | "destructive"> = {
+  active: "outline",
+  closed: "default",
+  dead: "destructive",
+};
+
+// The coloured call indicator (LD-A6). The colour comes from the lead's last
+// call outcome, which is set by logging a call.
+const CALL_COLOR: Record<LeadCallStatus, string> = {
+  answered: "text-chart-2",
+  follow_up: "text-chart-4",
+  not_answered: "text-destructive",
+  none: "text-muted-foreground",
+};
 
 export default function LeadsPage() {
   const { user, can } = useAuth();
@@ -148,6 +184,11 @@ function LeadsWorkspace() {
   const pagination = useAppSelector((state) => state.leads.pagination);
   const statuses = useAppSelector((state) => state.leads.statuses);
   const statusesLoading = useAppSelector((state) => state.leads.statusesLoading);
+  // The organization's own lists, read once here and handed to the form, the
+  // filters and the detail sheet, so all three agree on what exists.
+  const sources = useAppSelector((state) => state.leads.sources);
+  const channels = useAppSelector((state) => state.leads.channels);
+  const customFields = useAppSelector((state) => state.leads.customFields);
   const pipelines = useAppSelector((state) => state.leads.pipelines);
   const pipelinesError = useAppSelector((state) => state.leads.pipelinesError);
   const activities = useAppSelector((state) => state.leads.activeLeadActivities);
@@ -177,11 +218,20 @@ function LeadsWorkspace() {
   const [ownerFilter, setOwnerFilter] = useState(ALL);
   const [priorityFilter, setPriorityFilter] = useState(ALL);
   const [temperatureFilter, setTemperatureFilter] = useState(ALL);
+  const [lifecycleFilter, setLifecycleFilter] = useState(ALL);
+  const [channelFilter, setChannelFilter] = useState(ALL);
+  const [sourceFilter, setSourceFilter] = useState(ALL);
 
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
+  const [detailFullLead, setDetailFullLead] = useState<Lead | null>(null);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [leadSettingsOpen, setLeadSettingsOpen] = useState(false);
+  // A create the API refused as a duplicate, with the matches it sent back and
+  // the body to send again if the member says to add it anyway (LD-A1).
+  const [duplicate, setDuplicate] = useState<DuplicateLeadResult | null>(null);
+  const pendingDuplicateBody = useRef<Record<string, unknown> | null>(null);
 
   const setView = useCallback(
     (next: ViewMode) => {
@@ -203,9 +253,23 @@ function LeadsWorkspace() {
       assigned_to: ownerFilter !== ALL ? ownerFilter : undefined,
       priority: priorityFilter !== ALL ? priorityFilter : undefined,
       temperature: temperatureFilter !== ALL ? temperatureFilter : undefined,
+      lifecycle: lifecycleFilter !== ALL ? lifecycleFilter : undefined,
+      channel_id: channelFilter !== ALL ? channelFilter : undefined,
+      source_id: sourceFilter !== ALL ? sourceFilter : undefined,
       owner: ownershipFilter,
     }),
-    [search, activePipelineId, stageFilter, ownerFilter, priorityFilter, temperatureFilter, ownershipFilter],
+    [
+      search,
+      activePipelineId,
+      stageFilter,
+      ownerFilter,
+      priorityFilter,
+      temperatureFilter,
+      lifecycleFilter,
+      channelFilter,
+      sourceFilter,
+      ownershipFilter,
+    ],
   );
 
   // The ownership picker counts as a filter only when the member has narrowed it
@@ -218,6 +282,9 @@ function LeadsWorkspace() {
     ownerFilter !== ALL ||
     priorityFilter !== ALL ||
     temperatureFilter !== ALL ||
+    lifecycleFilter !== ALL ||
+    channelFilter !== ALL ||
+    sourceFilter !== ALL ||
     ownershipFilter !== ownership[0];
 
   // A saved view carries the filter values the API itself speaks, so applying
@@ -233,6 +300,9 @@ function LeadsWorkspace() {
       setOwnerFilter(next.assigned_to ?? ALL);
       setPriorityFilter(next.priority ?? ALL);
       setTemperatureFilter(next.temperature ?? ALL);
+      setLifecycleFilter(next.lifecycle ?? ALL);
+      setChannelFilter(next.channel_id ?? ALL);
+      setSourceFilter(next.source_id ?? ALL);
       setOwnershipFilter((next.owner as OwnershipFilter) ?? ownership[0]);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -264,10 +334,13 @@ function LeadsWorkspace() {
   // pipeline's and then be replaced a moment later by the remembered one's. If
   // the pipelines themselves can't be read, the list still loads: the API falls
   // back to the default board, which beats an empty screen.
+  // The Deleted tab reads its own list, with its own paging, so the live list
+  // is left alone while it is open rather than refetched for nothing.
   const refreshLeads = useCallback(() => {
+    if (view === "deleted") return;
     if (!activePipelineId && !pipelinesError) return;
     dispatch(reqToGetLeads({ data: query }));
-  }, [dispatch, query, activePipelineId, pipelinesError]);
+  }, [dispatch, query, activePipelineId, pipelinesError, view]);
 
   useEffect(() => {
     refreshLeads();
@@ -299,10 +372,19 @@ function LeadsWorkspace() {
     list.resetPaging();
   };
 
+  // Only the switched-on entries and fields: this is what the form offers and
+  // what the filters list. The settings dialog asks for the rest itself.
+  const refreshLeadLists = useCallback(() => {
+    dispatch(reqToGetLeadSources({ data: null }));
+    dispatch(reqToGetLeadChannels({ data: null }));
+    dispatch(reqToGetLeadCustomFields({ data: null }));
+  }, [dispatch]);
+
   useEffect(() => {
     dispatch(reqToGetPipelines({ data: null }));
     if (canLookupMembers) dispatch(reqToGetMemberOptions({ data: null }));
     if (!featuresLoaded) dispatch(reqToGetFeatures({}));
+    refreshLeadLists();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch]);
 
@@ -326,9 +408,21 @@ function LeadsWorkspace() {
   }, [activePipelineId, dispatch, user?.id]);
 
   useEffect(() => {
-    if (!detailLeadId) return;
+    if (!detailLeadId) {
+      setDetailFullLead(null);
+      return;
+    }
     dispatch(reqToGetLeadActivities({ data: { id: detailLeadId, limit: 100 } }));
     dispatch(reqToGetLeadNotes({ data: { id: detailLeadId } }));
+    // Read on its own as well, because only that answer carries the values of
+    // the organization's own fields.
+    dispatch(
+      reqToGetLead({
+        data: { id: detailLeadId },
+        onSuccess: (response: any) => setDetailFullLead(mapLeadFromApi(response?.data)),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailLeadId, dispatch]);
 
   // A notification about a lead lands here with ?lead=<id>. The sheet reads the lead
@@ -390,38 +484,94 @@ function LeadsWorkspace() {
   // Opens this form when the top bar's Create menu links here with ?new=1.
   useCreateFromUrl(openCreate);
 
+  // A list row does not carry the organization's own field values — only a
+  // single-lead read does. So the form and the sheet both work from the lead
+  // read on its own; opening the form with a row would show those fields empty
+  // and then save them as empty.
+  const loadFullLead = (leadId: string, then: (lead: Lead) => void, otherwise?: () => void) => {
+    dispatch(
+      reqToGetLead({
+        data: { id: leadId },
+        onSuccess: (response: any) => then(mapLeadFromApi(response?.data)),
+        onFailure: (error: unknown) => {
+          if (otherwise) otherwise();
+          else failed("Couldn't open this lead. Please try again.")(error);
+        },
+      }),
+    );
+  };
+
   const openEdit = (lead: Lead) => {
     setFormMode("edit");
-    setEditLead(lead);
-    setFormOpen(true);
+    loadFullLead(
+      lead.id,
+      (full) => {
+        setEditLead(full);
+        setFormOpen(true);
+      },
+      () => {
+        // The lead could not be re-read: edit what the list has, and leave the
+        // organization's own fields out of the save rather than blanking them.
+        setEditLead(lead);
+        setFormOpen(true);
+      },
+    );
+  };
+
+  // One place every create goes through, so the second attempt — the one that
+  // says "add it anyway" — follows exactly the same path as the first.
+  const createLead = (apiBody: Record<string, unknown>) => {
+    dispatch(
+      reqToCreateLead({
+        data: apiBody,
+        onSuccess: () => {
+          notify("Lead created.", { type: "success" });
+          setDuplicate(null);
+          pendingDuplicateBody.current = null;
+          // Only closed once the API has taken it, so a refusal leaves
+          // everything the member typed on screen.
+          setFormOpen(false);
+          refreshLeads();
+          refreshUsage();
+        },
+        onFailure: (error: unknown) => {
+          // LD-A1: the lead matches one that already exists. The matches ride
+          // along in the refusal, so nothing has to be asked for again.
+          if (apiErrorCode(error) === "DUPLICATE_LEAD") {
+            const body = (error as any)?.response?.data?.data;
+            setDuplicate(mapDuplicateResultFromApi(body));
+            pendingDuplicateBody.current = apiBody;
+            return;
+          }
+          // The API's message names the limit and ends with what the caller can do.
+          const refusal = limitRefusalFrom(error);
+          if (refusal) {
+            notify(refusal.message, { type: "error" });
+            refreshUsage();
+            return;
+          }
+          notify(apiErrorMessage(error, "Couldn't create lead. Please try again."), { type: "error" });
+        },
+      }),
+    );
   };
 
   const handleFormSubmit = (values: LeadFormValues) => {
     // A new lead joins the board the member is looking at. The stage picker only
     // offers that board's stages, so the two always agree.
-    const apiBody = mapLeadPayloadToApi({ ...values, pipelineId: activePipelineId ?? undefined });
+    // On an edit where the lead could not be re-read, its stored custom values
+    // are unknown, so they are left out: sending what the form holds would
+    // blank every one of them.
+    const customValuesKnown = formMode === "create" || !!editLead?.customFields;
+
+    const apiBody = mapLeadPayloadToApi({
+      ...values,
+      pipelineId: activePipelineId ?? undefined,
+      customFields: customValuesKnown ? customFieldsForApi(customFields, values.customFields) : undefined,
+    });
 
     if (formMode === "create") {
-      dispatch(
-        reqToCreateLead({
-          data: apiBody,
-          onSuccess: () => {
-            notify("Lead created.", { type: "success" });
-            refreshLeads();
-            refreshUsage();
-          },
-          onFailure: (error: unknown) => {
-            // The API's message names the limit and ends with what the caller can do.
-            const refusal = limitRefusalFrom(error);
-            if (refusal) {
-              notify(refusal.message, { type: "error" });
-              refreshUsage();
-              return;
-            }
-            notify(apiErrorMessage(error, "Couldn't create lead. Please try again."), { type: "error" });
-          },
-        }),
-      );
+      createLead(apiBody);
       return;
     }
 
@@ -439,6 +589,7 @@ function LeadsWorkspace() {
           data: { id: editLead.id, ...otherFields },
           onSuccess: () => {
             notify("Lead updated.", { type: "success" });
+            setFormOpen(false);
             refreshLeads();
           },
           onFailure: failed("Couldn't update lead. Please try again."),
@@ -461,9 +612,12 @@ function LeadsWorkspace() {
       reqToDeleteLead({
         data: { id },
         onSuccess: () => {
-          notify("Lead deleted.", { type: "success" });
+          // LD-A3: a delete is undoable for 30 days, so the confirmation says
+          // so and the toast points at where to undo it.
+          notify("Lead deleted. You can restore it from the Deleted tab for the next 30 days.", { type: "success" });
           list.clearSelection();
           refreshLeads();
+          refreshUsage();
         },
         onFailure: failed("Couldn't delete lead. Please try again."),
       }),
@@ -494,7 +648,12 @@ function LeadsWorkspace() {
   };
 
   const handleBulkDelete = () =>
-    runBulk(reqToBulkDeleteLeads, undefined, `${chosen} lead(s) deleted.`, "Couldn't delete leads. Please try again.");
+    runBulk(
+      reqToBulkDeleteLeads,
+      undefined,
+      `${chosen} lead(s) deleted. You can restore them from the Deleted tab for the next 30 days.`,
+      "Couldn't delete leads. Please try again.",
+    );
 
   const handleBulkStageChange = (stageId: string) =>
     runBulk(reqToBulkUpdateLeads, { data: { status_id: stageId } }, `Moved ${chosen} lead(s).`, "Couldn't move leads. Please try again.");
@@ -527,7 +686,7 @@ function LeadsWorkspace() {
           if (apiErrorCode(error) === "REASON_REQUIRED") {
             setReasonRequest({
               leadId,
-              leadName: lead?.fullName ?? "this lead",
+              leadName: leadDisplayName(lead),
               statusId,
               stageName: stage?.name ?? "this stage",
               refused: true,
@@ -549,7 +708,7 @@ function LeadsWorkspace() {
       const lead = leads.find((candidate) => candidate.id === leadId);
       setReasonRequest({
         leadId,
-        leadName: lead?.fullName ?? "this lead",
+        leadName: leadDisplayName(lead),
         statusId,
         stageName: stage.name,
       });
@@ -563,7 +722,7 @@ function LeadsWorkspace() {
 
   const handleAddActivity = (
     leadId: string,
-    values: { activityType: LeadActivityType; subject: string; description?: string },
+    values: { activityType: LeadActivityType; subject: string; description?: string; callStatus?: LeadCallStatus },
   ) => {
     dispatch(
       reqToAddLeadActivity({
@@ -572,8 +731,16 @@ function LeadsWorkspace() {
           activity_type: values.activityType,
           subject: values.subject,
           description: values.description,
+          // Only a call carries an outcome, and logging it is the only way the
+          // lead's last call status is set.
+          ...(values.callStatus && values.callStatus !== "none" ? { call_status: values.callStatus } : {}),
         },
-        onSuccess: () => dispatch(reqToGetLeadActivities({ data: { id: leadId, limit: 100 } })),
+        onSuccess: () => {
+          dispatch(reqToGetLeadActivities({ data: { id: leadId, limit: 100 } }));
+          // A logged call changes the lead's own last call status, which the
+          // list and the board both colour, so the rows have to catch up.
+          if (values.callStatus) refreshLeads();
+        },
         onFailure: () => notify("Couldn't log activity. Please try again.", { type: "error" }),
       }),
     );
@@ -620,7 +787,7 @@ function LeadsWorkspace() {
       reqToConvertLead({
         data: { leadId: lead.id },
         onSuccess: () => {
-          notify(`${lead.fullName} is now a contact.`, { type: "success" });
+          notify(`${leadDisplayName(lead)} is now a contact.`, { type: "success" });
           setDetailLeadId(null);
           refreshLeads();
         },
@@ -647,14 +814,51 @@ function LeadsWorkspace() {
       sortBy: "full_name",
       render: (row) => (
         <button type="button" className="text-left hover:underline" onClick={() => setDetailLeadId(row.id)}>
-          <Truncated value={row.fullName} className="font-medium" />
+          {/* A lead needs only one of a name, an email or a mobile, so some
+              have no name at all; the row says so, greyed, rather than being
+              blank or showing an email in its place. */}
+          <Truncated
+            value={leadDisplayName(row)}
+            className={hasNoName(row) ? "text-muted-foreground" : "font-medium"}
+          />
           {row.companyName && <Truncated value={row.companyName} className="text-xs text-muted-foreground" />}
         </button>
       ),
     },
     { key: "company_name", header: "Company", render: (row) => <Truncated value={row.companyName} /> },
     { key: "email", header: "Email", render: (row) => <Truncated value={row.email} /> },
-    { key: "mobile", header: "Mobile", render: (row) => row.mobile ?? "—" },
+    {
+      key: "mobile",
+      header: "Mobile",
+      help: help("last_call_status"),
+      // The dialler and the coloured call indicator together (LD-A6): the
+      // colour is the outcome of the last logged call.
+      render: (row) =>
+        row.mobile ? (
+          <a href={`tel:${row.mobile}`} className="inline-flex items-center gap-1.5 hover:underline">
+            <Phone
+              className={cn("h-3.5 w-3.5", CALL_COLOR[row.lastCallStatus ?? "none"])}
+              aria-label={CALL_STATUS_LABEL[row.lastCallStatus ?? "none"]}
+            />
+            {row.mobile}
+          </a>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "lifecycle",
+      header: "Lifecycle",
+      help: help("lifecycle"),
+      render: (row) =>
+        row.lifecycle ? (
+          <Badge variant={LIFECYCLE_VARIANT[row.lifecycle]}>{LIFECYCLE_LABEL[row.lifecycle]}</Badge>
+        ) : (
+          "—"
+        ),
+    },
+    { key: "source", header: "Source", help: help("source"), render: (row) => <Truncated value={row.sourceName} /> },
+    { key: "channel", header: "Channel", help: help("channel"), render: (row) => <Truncated value={row.channelName} /> },
     {
       key: "stage",
       header: "Stage",
@@ -753,6 +957,34 @@ function LeadsWorkspace() {
     { key: "alternate_mobile", header: "Alternate mobile", render: (row) => row.alternateMobile ?? "—" },
     { key: "designation", header: "Designation", render: (row) => <Truncated value={row.designation} /> },
     { key: "website", header: "Website", render: (row) => <Truncated value={row.website} /> },
+    {
+      key: "expected_close_date",
+      header: "Expected close",
+      sortBy: "expected_close_date",
+      help: help("expected_close_date"),
+      render: (row) => dateCell(row.expectedCloseDate),
+    },
+    {
+      key: "next_followup_at",
+      header: "Next follow-up",
+      sortBy: "next_followup_at",
+      help: help("next_followup_at"),
+      render: (row) => momentCell(row.nextFollowupAt),
+    },
+    {
+      key: "last_call_status",
+      header: "Last call",
+      help: help("last_call_status"),
+      render: (row) => (
+        <span className={CALL_COLOR[row.lastCallStatus ?? "none"]}>
+          {CALL_STATUS_LABEL[row.lastCallStatus ?? "none"]}
+        </span>
+      ),
+    },
+    { key: "city", header: "City", render: (row) => <Truncated value={row.city} /> },
+    { key: "state", header: "State", render: (row) => <Truncated value={row.state} /> },
+    { key: "country", header: "Country", render: (row) => <Truncated value={row.country} /> },
+    { key: "pincode", header: "Pincode", render: (row) => row.pincode ?? "—" },
     { key: "description", header: "Notes", render: (row) => <Truncated value={row.description} /> },
     { key: "created_at", header: "Created", sortBy: "created_at", render: (row) => dateCell(row.createdAt) },
     { key: "updated_at", header: "Updated", sortBy: "updated_at", render: (row) => dateCell(row.updatedAt) },
@@ -783,9 +1015,10 @@ function LeadsWorkspace() {
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete {row.fullName}?</AlertDialogTitle>
+                  <AlertDialogTitle>Delete {leadDisplayName(row)}?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This removes the lead from your pipeline. This can&apos;t be undone.
+                    This takes the lead off your pipeline. You can restore it from the Deleted tab for the next 30
+                    days, after which it can no longer be brought back.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -800,7 +1033,13 @@ function LeadsWorkspace() {
     },
   ];
 
-  const detailLead = leads.find((candidate) => candidate.id === detailLeadId) ?? null;
+  // The lead read on its own when it arrives, the list's row until then, so the
+  // sheet opens at once and fills in the organization's own fields a moment
+  // later rather than waiting on a request.
+  const detailLead =
+    (detailFullLead && detailFullLead.id === detailLeadId ? detailFullLead : null) ??
+    leads.find((candidate) => candidate.id === detailLeadId) ??
+    null;
 
   // Exporting follows the selection: the ticked rows, or everything the filters
   // match when nothing is ticked.
@@ -827,6 +1066,10 @@ function LeadsWorkspace() {
           initialLead={editLead ?? undefined}
           statuses={statuses}
           owners={formOwners}
+          sources={sources}
+          channels={channels}
+          customFields={customFields}
+          pipelineName={pipelines.find((pipeline) => pipeline.id === activePipelineId)?.name}
           open={formOpen}
           onOpenChange={setFormOpen}
           onSubmit={handleFormSubmit}
@@ -886,11 +1129,14 @@ function LeadsWorkspace() {
         <TabsList>
           <TabsTrigger value="list">List</TabsTrigger>
           <TabsTrigger value="kanban">Kanban</TabsTrigger>
+          {/* Whoever may delete a lead may see the ones that were deleted and
+              bring them back: the API gates both on the same permission. */}
+          {canDelete && <TabsTrigger value="deleted">Deleted</TabsTrigger>}
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {view !== "analytics" && (
+      {view === "list" || view === "kanban" ? (
         <SavedViewsBar
           listKey={LIST_KEY}
           activeViewId={list.activeViewId}
@@ -902,7 +1148,7 @@ function LeadsWorkspace() {
             viewMode: view === "kanban" ? "kanban" : "table",
           }}
         />
-      )}
+      ) : null}
 
       {/* One toolbar. The pipeline comes first because it decides what every
           control after it is working on, and it stays on the Analytics tab
@@ -915,7 +1161,16 @@ function LeadsWorkspace() {
           onEdit={canManagePipeline ? () => setPipelineSettingsOpen(true) : undefined}
         />
 
-        {view !== "analytics" && (
+        {/* The lists the lead form offers, and the fields this organization has
+            added. Same permission as the pipeline, because it is the same kind
+            of decision: what shape this organization's leads take. */}
+        {canManagePipeline && (
+          <Button variant="outline" size="sm" onClick={() => setLeadSettingsOpen(true)}>
+            <Settings2 className="h-4 w-4" /> Lead settings
+          </Button>
+        )}
+
+        {view === "list" || view === "kanban" ? (
           <>
           <Separator orientation="vertical" className="mx-1 h-6" />
 
@@ -982,13 +1237,50 @@ function LeadsWorkspace() {
             </SelectContent>
           </Select>
 
+          {/* LD-F2's quick filters. Lifecycle follows the stage rather than
+              being a field of its own, so this narrows by what the stages on
+              this board mean: open, won or lost. */}
+          <Select value={lifecycleFilter} onValueChange={changeFilter(setLifecycleFilter)}>
+            <SelectTrigger className="w-36" aria-label="Lifecycle"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Any lifecycle</SelectItem>
+              <SelectItem value="active">{LIFECYCLE_LABEL.active}</SelectItem>
+              <SelectItem value="closed">{LIFECYCLE_LABEL.closed}</SelectItem>
+              <SelectItem value="dead">{LIFECYCLE_LABEL.dead}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {channels.length > 0 && (
+            <Select value={channelFilter} onValueChange={changeFilter(setChannelFilter)}>
+              <SelectTrigger className="w-36" aria-label="Channel"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Channels</SelectItem>
+                {channels.map((entry) => (
+                  <SelectItem key={entry.id} value={entry.id}>{entry.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {sources.length > 0 && (
+            <Select value={sourceFilter} onValueChange={changeFilter(setSourceFilter)}>
+              <SelectTrigger className="w-40" aria-label="Source"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>All Sources</SelectItem>
+                {sources.map((entry) => (
+                  <SelectItem key={entry.id} value={entry.id}>{entry.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
           {hasFilters && (
             <Button variant="ghost" size="sm" onClick={clearFilters}>
               Clear filters
             </Button>
           )}
           </>
-        )}
+        ) : null}
       </div>
 
       {chosen > 0 && view === "list" && canBulk && (
@@ -1028,8 +1320,8 @@ function LeadsWorkspace() {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {allMatching
-                    ? "This deletes every lead matching your current filters, including those on other pages. This can't be undone."
-                    : "This can't be undone."}
+                    ? "This deletes every lead matching your current filters, including those on other pages. Each one can be restored from the Deleted tab for the next 30 days, one at a time."
+                    : "Each one can be restored from the Deleted tab for the next 30 days, one at a time."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -1092,6 +1384,19 @@ function LeadsWorkspace() {
         </div>
       )}
 
+      {view === "deleted" && canDelete && (
+        <DeletedLeadsView
+          pipelineId={activePipelineId}
+          onRestored={() => {
+            refreshUsage();
+            // The live list is not on screen, so it is refreshed the next time
+            // the member goes back to it; the usage figures are, because a
+            // restored lead counts against the plan again.
+            list.clearSelection();
+          }}
+        />
+      )}
+
       {view === "analytics" && (
         <div className="space-y-2">
           {total > BOARD_PAGE_SIZE && (
@@ -1112,6 +1417,7 @@ function LeadsWorkspace() {
         notes={notes}
         statuses={statuses}
         owners={owners}
+        customFields={customFields}
         open={!!detailLeadId}
         onOpenChange={(open) => !open && setDetailLeadId(null)}
         onEdit={
@@ -1143,6 +1449,51 @@ function LeadsWorkspace() {
           submitStageChange(reasonRequest.leadId, reasonRequest.statusId, reason, after);
         }}
       />
+
+      {/* LD-A1: the lead matches one that already exists. Open the match, or
+          add this one anyway — which resends exactly the same body with the
+          member's confirmation on it. */}
+      <DuplicateLeadDialog
+        result={duplicate}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDuplicate(null);
+            pendingDuplicateBody.current = null;
+          }
+        }}
+        onOpenLead={(leadId) => {
+          setDuplicate(null);
+          pendingDuplicateBody.current = null;
+          setFormOpen(false);
+          // The sheet reads the lead out of the loaded page, so a match on
+          // another page is reached through the deep link instead.
+          if (leads.some((candidate) => candidate.id === leadId)) {
+            setDetailLeadId(leadId);
+            return;
+          }
+          const params = new URLSearchParams(searchParams.toString());
+          params.set("lead", leadId);
+          router.replace(`${pathname}?${params.toString()}`);
+          clearFilters();
+        }}
+        onCreateAnyway={() => {
+          const body = pendingDuplicateBody.current;
+          if (!body) return;
+          setDuplicate(null);
+          createLead({ ...body, confirm_duplicate: true });
+        }}
+      />
+
+      {canManagePipeline && (
+        <LeadSettingsDialog
+          open={leadSettingsOpen}
+          onOpenChange={setLeadSettingsOpen}
+          onChanged={() => {
+            refreshLeadLists();
+            refreshLeads();
+          }}
+        />
+      )}
 
       {canManagePipeline && (
         <PipelineSettingsDialog

@@ -22,6 +22,12 @@ export const LEAD_FIELD_HELP: Record<string, string> = {
   probability: "Your estimate of the chance this lead closes, as a percentage.",
   assignee: "The member who owns this lead. Only they, their team or an admin can see it, depending on roles.",
   tags: "Free labels for grouping leads — industry, event, campaign. Filter on them from the search bar.",
+  lifecycle: "Active, Closed or Dead. It follows the stage: a won stage closes the lead, a lost one marks it dead.",
+  source: "Where the lead came from — an event, a campaign, a form, or typed in by hand.",
+  channel: "How contact with this lead happens — phone, WhatsApp, walk-in. Different from the source, which is where it came from.",
+  expected_close_date: "When you expect this lead to close. Used for forecasting, not a deadline.",
+  next_followup_at: "When this lead is next due a call or a message.",
+  last_call_status: "How the last call went, which is what colours the phone icon: green answered, yellow a follow-up is pending, red not answered, grey never called.",
 };
 
 export const CONTACT_FIELD_HELP: Record<string, string> = {

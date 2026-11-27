@@ -5,14 +5,23 @@ import { formatDistanceToNow } from "date-fns";
 import { Pencil, Trash2, UserCheck } from "lucide-react";
 
 import {
+  CALL_STATUS_LABEL,
+  LIFECYCLE_LABEL,
+  OUTCOME_LABEL,
+  hasNoName,
+  leadDisplayName,
   resolveOwnerName,
+  stageOutcome,
   type Lead,
   type LeadActivity,
   type LeadActivityType,
+  type LeadCallStatus,
+  type LeadCustomFieldDefinition,
   type LeadNote,
   type LeadOwner,
   type LeadStage,
 } from "@/lib/leads/types";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +41,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Truncated } from "@/components/shared/field-help";
 import { LeadAttachments } from "@/components/leads/lead-attachments";
 
 const ACTIVITY_TYPES: LeadActivityType[] = ["call", "email", "meeting", "note", "whatsapp", "sms", "demo"];
+
+// The outcomes a call can be logged with. "Never called" is not one of them: it
+// is what a lead reads before anyone has called it, not something to record.
+const CALL_OUTCOMES: Exclude<LeadCallStatus, "none">[] = ["answered", "not_answered", "follow_up"];
+
+const DATE_TIME = { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" } as const;
+
+const asDate = (value?: string) => (value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : null);
+const asMoment = (value?: string) => (value ? new Date(value).toLocaleString("en-IN", DATE_TIME) : null);
+
+// One lead's value for a tenant-defined field, read as the kind of thing that
+// field holds, so a yes/no reads "Yes" and not "true".
+const customValueText = (definition: LeadCustomFieldDefinition, value: unknown): string => {
+  if (definition.fieldType === "checkbox") return value === true ? "Yes" : "No";
+  if (value === null || value === undefined || value === "") return "—";
+  if (definition.fieldType === "date") return asDate(String(value)) ?? "—";
+  return String(value);
+};
 
 interface LeadDetailSheetProps {
   lead: Lead | null;
@@ -42,12 +70,17 @@ interface LeadDetailSheetProps {
   notes: LeadNote[];
   statuses: LeadStage[];
   owners: LeadOwner[];
+  // The organization's own fields, so the values on the lead can be labelled.
+  customFields?: LeadCustomFieldDefinition[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   // Every write is optional: the caller passes only what the user's
   // permissions allow, and each control is hidden when its handler is absent.
   onEdit?: (lead: Lead) => void;
-  onAddActivity?: (leadId: string, values: { activityType: LeadActivityType; subject: string; description?: string }) => void;
+  onAddActivity?: (
+    leadId: string,
+    values: { activityType: LeadActivityType; subject: string; description?: string; callStatus?: LeadCallStatus },
+  ) => void;
   onAddNote?: (leadId: string, note: string) => void;
   onUpdateNote?: (noteId: string, note: string) => void;
   onDeleteNote?: (noteId: string) => void;
@@ -62,6 +95,7 @@ export function LeadDetailSheet({
   notes,
   statuses,
   owners,
+  customFields = [],
   open,
   onOpenChange,
   onEdit,
@@ -75,6 +109,9 @@ export function LeadDetailSheet({
   const [activityType, setActivityType] = useState<LeadActivityType>("call");
   const [activitySubject, setActivitySubject] = useState("");
   const [activityDescription, setActivityDescription] = useState("");
+  // Only a call carries an outcome, which is also what sets the lead's last
+  // call status; anything else is logged without one.
+  const [callStatus, setCallStatus] = useState<LeadCallStatus>("answered");
 
   const [draftNote, setDraftNote] = useState("");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
@@ -91,6 +128,9 @@ export function LeadDetailSheet({
       activityType,
       subject: activitySubject.trim(),
       description: activityDescription.trim() || undefined,
+      // The API refuses an outcome on anything but a call, so it only rides
+      // along with one.
+      callStatus: activityType === "call" ? callStatus : undefined,
     });
     setActivitySubject("");
     setActivityDescription("");
@@ -113,8 +153,12 @@ export function LeadDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <SheetTitle>{lead.fullName}</SheetTitle>
-          <SheetDescription>{lead.companyName || "No company on file"}</SheetDescription>
+          {/* A lead needs only one of a name, an email or a mobile, so some
+              have no name at all. Saying so beats showing an email as a name. */}
+          <SheetTitle className={cn(hasNoName(lead) && "text-muted-foreground")}>{leadDisplayName(lead)}</SheetTitle>
+          <SheetDescription>
+            {lead.companyName ? <Truncated value={lead.companyName} width="max-w-full" /> : "No company on file"}
+          </SheetDescription>
         </SheetHeader>
 
         <div className="space-y-4 px-4 pb-4">
@@ -129,6 +173,13 @@ export function LeadDetailSheet({
             {outcome && (
               <Badge variant={outcome === "won" ? "default" : "destructive"}>{OUTCOME_LABEL[outcome]}</Badge>
             )}
+            {/* Active / Closed / Dead. It follows the stage, so it is shown
+                beside it rather than offered as something to set. */}
+            {lead.lifecycle && (
+              <Badge variant={lead.lifecycle === "active" ? "outline" : lead.lifecycle === "closed" ? "default" : "destructive"}>
+                {LIFECYCLE_LABEL[lead.lifecycle]}
+              </Badge>
+            )}
             <Badge variant="secondary" className="capitalize">{lead.priority}</Badge>
             <Badge variant="secondary" className="capitalize">{lead.temperature}</Badge>
             {lead.assignedTo && <Badge variant="outline">{resolveOwnerName(owners, lead.assignedTo)}</Badge>}
@@ -136,14 +187,70 @@ export function LeadDetailSheet({
 
           <div className="grid grid-cols-2 gap-2 text-sm">
             {lead.email && <p className="text-muted-foreground">Email: <span className="text-foreground">{lead.email}</span></p>}
-            {lead.mobile && <p className="text-muted-foreground">Mobile: <span className="text-foreground">{lead.mobile}</span></p>}
+            {lead.mobile && (
+              <p className="text-muted-foreground">
+                Mobile: <a href={`tel:${lead.mobile}`} className="text-foreground hover:underline">{lead.mobile}</a>
+              </p>
+            )}
+            {lead.alternateMobile && (
+              <p className="text-muted-foreground">
+                Alternate: <a href={`tel:${lead.alternateMobile}`} className="text-foreground hover:underline">{lead.alternateMobile}</a>
+              </p>
+            )}
+            {lead.sourceName && <p className="text-muted-foreground">Source: <span className="text-foreground">{lead.sourceName}</span></p>}
+            {lead.channelName && <p className="text-muted-foreground">Channel: <span className="text-foreground">{lead.channelName}</span></p>}
             {typeof lead.value === "number" && (
               <p className="text-muted-foreground">Value: <span className="text-foreground">₹{lead.value.toLocaleString("en-IN")}</span></p>
             )}
             {typeof lead.probability === "number" && (
               <p className="text-muted-foreground">Probability: <span className="text-foreground">{lead.probability}%</span></p>
             )}
+            {lead.expectedCloseDate && (
+              <p className="text-muted-foreground">Expected close: <span className="text-foreground">{asDate(lead.expectedCloseDate)}</span></p>
+            )}
+            {/* Nothing reminds anyone of this yet: the Calendar view and
+                follow-up reminders are a separate feature still to come. */}
+            {lead.nextFollowupAt && (
+              <p className="text-muted-foreground">Next follow-up: <span className="text-foreground">{asMoment(lead.nextFollowupAt)}</span></p>
+            )}
+            <p className="text-muted-foreground">
+              Last call: <span className="text-foreground">{CALL_STATUS_LABEL[lead.lastCallStatus ?? "none"]}</span>
+            </p>
+            {lead.adCampaign && (
+              <p className="text-muted-foreground">
+                Campaign: <span className="text-foreground">{lead.adCampaign.name ?? lead.adCampaign.id}</span>
+              </p>
+            )}
+            <p className="text-muted-foreground">Created: <span className="text-foreground">{asMoment(lead.createdAt)}</span></p>
+            <p className="text-muted-foreground">Updated: <span className="text-foreground">{asMoment(lead.updatedAt)}</span></p>
           </div>
+
+          {(lead.address || lead.city || lead.state || lead.country || lead.pincode) && (
+            <p className="text-sm text-muted-foreground">
+              Address:{" "}
+              <span className="text-foreground">
+                {[lead.address, lead.city, lead.state, lead.country, lead.pincode].filter(Boolean).join(", ")}
+              </span>
+            </p>
+          )}
+
+          {/* `customFields` is undefined on a lead read from a list page and an
+              object on one read on its own, so an empty object really means
+              "nothing filled in", not "not loaded". */}
+          {lead.customFields && customFields.length > 0 && (
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              {customFields
+                .filter((definition) => definition.active || lead.customFields?.[definition.key] !== undefined)
+                .map((definition) => (
+                  <p key={definition.id} className="text-muted-foreground">
+                    {definition.label}:{" "}
+                    <span className="text-foreground">
+                      {customValueText(definition, lead.customFields?.[definition.key])}
+                    </span>
+                  </p>
+                ))}
+            </div>
+          )}
 
           {lead.description && <p className="text-sm text-muted-foreground">{lead.description}</p>}
 
@@ -202,6 +309,25 @@ export function LeadDetailSheet({
                       className="flex-1"
                     />
                   </div>
+                  {/* Logging a call is also how the lead's last call status is
+                      set, which is what colours its call indicator. */}
+                  {activityType === "call" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">How did it go?</span>
+                      <Select value={callStatus} onValueChange={(v) => setCallStatus(v as LeadCallStatus)}>
+                        <SelectTrigger className="w-44">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CALL_OUTCOMES.map((outcome) => (
+                            <SelectItem key={outcome} value={outcome}>
+                              {CALL_STATUS_LABEL[outcome]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <Textarea
                     value={activityDescription}
                     onChange={(e) => setActivityDescription(e.target.value)}

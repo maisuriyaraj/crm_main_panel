@@ -91,6 +91,15 @@ export const apiRoutes = {
     leadPipelines: "/leads/pipelines",
     leadNotes: "/leads/notes",
     leadsExport: "/leads/export",
+    // The two tenant-owned lead picklists and the fields a tenant adds to its
+    // own leads. Reading them needs only leads.view; shaping them needs
+    // leads.pipeline.manage, the same key that gates the pipeline.
+    leadSources: "/leads/sources",
+    leadChannels: "/leads/channels",
+    leadCustomFields: "/leads/custom-fields",
+    // Asks whether this email or mobile is already on a lead, before the Add
+    // Lead form submits.
+    leadDuplicateCheck: "/leads/check-duplicates",
     contacts: "/contacts",
     contactNotes: "/contacts/notes",
     contactsExport: "/contacts/export",

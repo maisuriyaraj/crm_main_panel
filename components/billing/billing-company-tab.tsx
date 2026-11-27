@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { apiErrorMessage, apiFieldErrors } from "@/lib/auth/errors";
 import { notify } from "@/lib/commonFunctions";
@@ -95,8 +95,14 @@ export function BillingCompanyTab({ company, canManage }: { company: BillingComp
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // A save answers with the saved values, so the form follows what was stored.
-  useEffect(() => setForm(formFrom(company)), [company]);
+  // A save answers with the values that were actually stored, so the form follows them.
+  // Done while rendering rather than in an effect: React treats resetting state from a
+  // changed prop as a render-time adjustment, which avoids a second render pass.
+  const [builtFrom, setBuiltFrom] = useState(company);
+  if (builtFrom !== company) {
+    setBuiltFrom(company);
+    setForm(formFrom(company));
+  }
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((current) => ({ ...current, [key]: value }));
   const india = form.country === "IN";

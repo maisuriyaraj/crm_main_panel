@@ -2,12 +2,23 @@ import { Axios } from "@/lib/axios";
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import { apiRoutes } from "@/lib/constants";
 import {
+  mapCustomFieldFromApi,
+  mapDuplicateResultFromApi,
   mapLeadActivityFromApi,
   mapLeadFromApi,
   mapLeadNoteFromApi,
+  mapLeadPicklistFromApi,
   mapLeadStatusFromApi,
 } from "@/lib/leads/mappers";
-import type { Lead, LeadActivity, LeadNote, LeadStage, Pipeline } from "@/lib/leads/types";
+import type {
+  Lead,
+  LeadActivity,
+  LeadCustomFieldDefinition,
+  LeadNote,
+  LeadPicklistEntry,
+  LeadStage,
+  Pipeline,
+} from "@/lib/leads/types";
 import { mapEmptyStateFromApi, mapPaginationFromApi, type ListEmptyState, type ListPagination } from "@/lib/lists/types";
 
 interface LeadsState {
@@ -35,6 +46,15 @@ interface LeadsState {
 
   activeLeadNotes: LeadNote[];
   notesLoading: boolean;
+
+  // The organization's own lists: where leads come from, how contact happens,
+  // and the fields it has added to its leads. Shared by the lead form, the
+  // toolbar filters and the settings screen, so they are loaded once.
+  sources: LeadPicklistEntry[];
+  channels: LeadPicklistEntry[];
+  customFields: LeadCustomFieldDefinition[];
+  picklistsLoading: boolean;
+  picklistsError: string | null;
 }
 
 const initialState: LeadsState = {
@@ -45,6 +65,12 @@ const initialState: LeadsState = {
   isLoading: false,
   error: null,
 
+  // Without a starting value the pipeline selector reads `undefined.length`
+  // on the first render, before the boards have been fetched.
+  pipelines: [],
+  pipelinesLoading: false,
+  pipelinesError: null,
+
   statuses: [],
   statusesLoading: false,
   statusesError: null,
@@ -54,6 +80,12 @@ const initialState: LeadsState = {
 
   activeLeadNotes: [],
   notesLoading: false,
+
+  sources: [],
+  channels: [],
+  customFields: [],
+  picklistsLoading: false,
+  picklistsError: null,
 };
 
 // Leads CRUD
@@ -174,6 +206,56 @@ export const reqToDeleteLead = createAsyncThunk<
 
       return rejectWithValue({
         message: error?.response?.data?.message || "Failed to delete lead",
+      });
+    }
+  }
+);
+
+// LD-A3: a deleted lead goes back into the pipeline, while its 30-day window is
+// still open. The API refuses it afterwards with RESTORE_PERIOD_OVER.
+export const reqToRestoreLead = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToRestoreLead",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.post(`${apiRoutes.leads}/${data.id}/restore`);
+
+      onSuccess?.(response.data);
+
+      return { id: data.id, ...response.data };
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to restore lead",
+      });
+    }
+  }
+);
+
+// LD-A1: asked while the Add Lead form is still open, so a match can be shown
+// before anything is saved and nothing the member typed is lost.
+export const reqToCheckLeadDuplicates = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToCheckLeadDuplicates",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.post(apiRoutes.leadDuplicateCheck, data);
+
+      onSuccess?.(mapDuplicateResultFromApi(response.data?.data));
+
+      return mapDuplicateResultFromApi(response.data?.data);
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({
+        message: error?.response?.data?.message || "Failed to check for duplicates",
       });
     }
   }
@@ -618,6 +700,180 @@ export const reqToDeleteLeadStatus = createAsyncThunk<
   }
 );
 
+// Lead sources and channels
+//
+// Source is where the lead came from; channel is how contact with it happens.
+// The two lists have the same shape and the same routes, so one pair of helpers
+// builds both sets of thunks and only the path differs.
+
+const picklistThunks = (kind: "sources" | "channels", path: string, noun: string) => ({
+  list: createAsyncThunk<any, any, { rejectValue: { message: string } }>(
+    `leads/reqToGetLead${kind}`,
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+      try {
+        const response = await Axios.get(path, { params: data ?? {} });
+
+        onSuccess?.(response.data);
+
+        return { kind, entries: (response.data?.data ?? []).map(mapLeadPicklistFromApi) };
+      } catch (error: any) {
+        onFailure?.(error);
+
+        return rejectWithValue({ message: error?.response?.data?.message || `Failed to load lead ${noun}s` });
+      }
+    }
+  ),
+  create: createAsyncThunk<any, any, { rejectValue: { message: string } }>(
+    `leads/reqToCreateLead${kind}`,
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+      try {
+        const response = await Axios.post(path, data);
+
+        onSuccess?.(response.data);
+
+        return response.data;
+      } catch (error: any) {
+        onFailure?.(error);
+
+        return rejectWithValue({ message: error?.response?.data?.message || `Failed to create lead ${noun}` });
+      }
+    }
+  ),
+  update: createAsyncThunk<any, any, { rejectValue: { message: string } }>(
+    `leads/reqToUpdateLead${kind}`,
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+      try {
+        const { id, ...rest } = data;
+        const response = await Axios.patch(`${path}/${id}`, rest);
+
+        onSuccess?.(response.data);
+
+        return response.data;
+      } catch (error: any) {
+        onFailure?.(error);
+
+        return rejectWithValue({ message: error?.response?.data?.message || `Failed to update lead ${noun}` });
+      }
+    }
+  ),
+  remove: createAsyncThunk<any, any, { rejectValue: { message: string } }>(
+    `leads/reqToDeleteLead${kind}`,
+    async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+      try {
+        const response = await Axios.delete(`${path}/${data.id}`);
+
+        onSuccess?.(response.data);
+
+        return { id: data.id, ...response.data };
+      } catch (error: any) {
+        onFailure?.(error);
+
+        return rejectWithValue({ message: error?.response?.data?.message || `Failed to remove lead ${noun}` });
+      }
+    }
+  ),
+});
+
+const sourceThunks = picklistThunks("sources", apiRoutes.leadSources, "source");
+const channelThunks = picklistThunks("channels", apiRoutes.leadChannels, "channel");
+
+export const reqToGetLeadSources = sourceThunks.list;
+export const reqToCreateLeadSource = sourceThunks.create;
+export const reqToUpdateLeadSource = sourceThunks.update;
+export const reqToDeleteLeadSource = sourceThunks.remove;
+
+export const reqToGetLeadChannels = channelThunks.list;
+export const reqToCreateLeadChannel = channelThunks.create;
+export const reqToUpdateLeadChannel = channelThunks.update;
+export const reqToDeleteLeadChannel = channelThunks.remove;
+
+// Tenant-defined lead fields
+
+export const reqToGetLeadCustomFields = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToGetLeadCustomFields",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.get(apiRoutes.leadCustomFields, { params: data ?? {} });
+
+      onSuccess?.(response.data);
+
+      return (response.data?.data ?? []).map(mapCustomFieldFromApi);
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({ message: error?.response?.data?.message || "Failed to load lead fields" });
+    }
+  }
+);
+
+export const reqToCreateLeadCustomField = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToCreateLeadCustomField",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.post(apiRoutes.leadCustomFields, data);
+
+      onSuccess?.(response.data);
+
+      return response.data;
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({ message: error?.response?.data?.message || "Failed to create lead field" });
+    }
+  }
+);
+
+export const reqToUpdateLeadCustomField = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToUpdateLeadCustomField",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const { id, ...rest } = data;
+      const response = await Axios.patch(`${apiRoutes.leadCustomFields}/${id}`, rest);
+
+      onSuccess?.(response.data);
+
+      return response.data;
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({ message: error?.response?.data?.message || "Failed to update lead field" });
+    }
+  }
+);
+
+export const reqToDeleteLeadCustomField = createAsyncThunk<
+  any,
+  any,
+  { rejectValue: { message: string } }
+>(
+  "leads/reqToDeleteLeadCustomField",
+  async ({ data, onSuccess, onFailure }, { rejectWithValue }) => {
+    try {
+      const response = await Axios.delete(`${apiRoutes.leadCustomFields}/${data.id}`);
+
+      onSuccess?.(response.data);
+
+      return { id: data.id, ...response.data };
+    } catch (error: any) {
+      onFailure?.(error);
+
+      return rejectWithValue({ message: error?.response?.data?.message || "Failed to remove lead field" });
+    }
+  }
+);
+
 const leadsSlice = createSlice({
   name: "leads",
   initialState,
@@ -653,7 +909,9 @@ const leadsSlice = createSlice({
       state.error = action.payload?.message || "An error occurred";
     });
 
-    [reqToCreateLead, reqToUpdateLead, reqToDeleteLead, reqToBulkUpdateLeads, reqToBulkDeleteLeads, reqToChangeLeadStage].forEach(
+    // The duplicate check reads nothing into the store: its answer belongs to
+    // the one form that asked, which keeps it in its own state.
+    [reqToCreateLead, reqToUpdateLead, reqToDeleteLead, reqToRestoreLead, reqToBulkUpdateLeads, reqToBulkDeleteLeads, reqToChangeLeadStage].forEach(
       (thunk) => {
         builder.addCase(thunk.pending, (state) => {
           state.isLoading = true;
@@ -765,6 +1023,61 @@ const leadsSlice = createSlice({
       builder.addCase(thunk.rejected, (state, action) => {
         state.statusesLoading = false;
         state.statusesError = action.payload?.message || "An error occurred";
+      });
+    });
+
+    // Both picklists land in the same two reducers; the payload says which list
+    // it is, so sources and channels never overwrite each other.
+    [reqToGetLeadSources, reqToGetLeadChannels].forEach((thunk) => {
+      builder.addCase(thunk.fulfilled, (state, action) => {
+        state.picklistsLoading = false;
+        if (action.payload?.kind === "channels") state.channels = action.payload.entries;
+        else state.sources = action.payload.entries;
+      });
+    });
+
+    builder.addCase(reqToGetLeadCustomFields.fulfilled, (state, action) => {
+      state.picklistsLoading = false;
+      state.customFields = action.payload;
+    });
+
+    [
+      reqToGetLeadSources,
+      reqToGetLeadChannels,
+      reqToGetLeadCustomFields,
+      reqToCreateLeadSource,
+      reqToUpdateLeadSource,
+      reqToDeleteLeadSource,
+      reqToCreateLeadChannel,
+      reqToUpdateLeadChannel,
+      reqToDeleteLeadChannel,
+      reqToCreateLeadCustomField,
+      reqToUpdateLeadCustomField,
+      reqToDeleteLeadCustomField,
+    ].forEach((thunk) => {
+      builder.addCase(thunk.pending, (state) => {
+        state.picklistsLoading = true;
+        state.picklistsError = null;
+      });
+      builder.addCase(thunk.rejected, (state, action) => {
+        state.picklistsLoading = false;
+        state.picklistsError = action.payload?.message || "An error occurred";
+      });
+    });
+
+    [
+      reqToCreateLeadSource,
+      reqToUpdateLeadSource,
+      reqToDeleteLeadSource,
+      reqToCreateLeadChannel,
+      reqToUpdateLeadChannel,
+      reqToDeleteLeadChannel,
+      reqToCreateLeadCustomField,
+      reqToUpdateLeadCustomField,
+      reqToDeleteLeadCustomField,
+    ].forEach((thunk) => {
+      builder.addCase(thunk.fulfilled, (state) => {
+        state.picklistsLoading = false;
       });
     });
   },
