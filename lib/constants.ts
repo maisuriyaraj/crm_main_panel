@@ -25,6 +25,13 @@ export const pageRoutes = {
     // tax rates, invoice emails and payment gateway keys. A different thing from
     // settingsBilling above, which is what OrbitOps charges the organization.
     settingsBillingSettings: "/settings/billing-settings",
+    // The clients this organization invoices. Beside the invoice settings above,
+    // in the same Billing area; `/settings/billing` is a different page (the
+    // invoices OrbitOps sends this organization).
+    billingClients: "/settings/billing-clients",
+    // The catalogue an invoice line will be filled in from. Beside the clients
+    // and the invoice settings, in the same Billing area.
+    billingProducts: "/settings/billing-products",
     settingsCompany: "/settings/company",
     settingsNotifications: "/settings/notifications",
     settingsTeamRoles: "/settings/team/roles",
@@ -44,6 +51,9 @@ export const pageRoutes = {
     adsManagerAbTesting: "/ads-manager/ab-testing",
     adsManagerAnalytics: "/ads-manager/analytics",
 }
+
+// One client's page. The id comes from the clients list or from a conversion.
+export const billingClientRoute = (clientId: string) => `${pageRoutes.billingClients}/${clientId}`;
 
 // Joins an org id/slug with a pageRoutes value. `route` already carries its
 // own leading slash, so this must not add a second one between the two.
@@ -127,6 +137,13 @@ export const apiRoutes = {
     billingSettingsAccountingItems: "/app/billing-settings/accounting/sync-items",
     billingSettingsAccountingSync: "/app/billing-settings/accounting/sync",
     billingSettingsTallyExport: "/app/billing-settings/accounting/tally/export.xml",
+    // The clients the organization invoices. One client takes a trailing id, and
+    // "/{id}/status" is the only way a client leaves the list: there is no delete.
+    billingClients: "/app/billing/clients",
+    // The products and services the organization sells. One item takes a
+    // trailing id, and "/{id}/status" is the only way an item leaves the list:
+    // there is no delete, so an invoice keeps reading correctly forever.
+    billingProducts: "/app/billing/products",
     notifications: "/app/notifications",
     notificationsReadAll: "/app/notifications/read-all",
     // Each member's own choice of which notices they get.

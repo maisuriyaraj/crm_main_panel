@@ -134,7 +134,18 @@ export function TaxRatesTab({ canManage }: { canManage: boolean }) {
     setError(null);
     const action = await dispatch(reqToDeleteTaxRate({
       data: { id: removing.id },
-      onFailure: (failure) => fail(failure, "Couldn't remove that tax rate."),
+      onFailure: (failure: any) => {
+        // A rate that a product or service uses as its default tax cannot be
+        // removed: dropping it would silently make those items untaxed and put
+        // wrong tax on the next invoice. The API's own message names how many
+        // items are in the way and says to turn the rate off instead, so it is
+        // shown rather than replaced with a shorter, less useful line.
+        if (failure?.response?.data?.code === "TAX_RATE_IN_USE") {
+          setError(failure.response.data.message ?? "Some of your products and services use this rate. Turn it off instead of removing it.");
+          return;
+        }
+        fail(failure, "Couldn't remove that tax rate.");
+      },
     }));
     if (reqToDeleteTaxRate.fulfilled.match(action)) {
       notify("Tax rate removed.", { type: "success" });
@@ -268,6 +279,8 @@ export function TaxRatesTab({ canManage }: { canManage: boolean }) {
             <AlertDialogTitle>Remove {removing?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               It will no longer be offered on an invoice. If you may need it again, turn it off instead of removing it.
+              A rate that any of your products or services uses can&apos;t be removed at all — turn it off instead, so
+              those items keep reading correctly.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

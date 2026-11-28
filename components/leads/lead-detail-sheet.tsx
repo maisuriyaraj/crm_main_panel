@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Pencil, Trash2, UserCheck } from "lucide-react";
+import { Building, Loader2, Pencil, Trash2, UserCheck } from "lucide-react";
 
 import {
   CALL_STATUS_LABEL,
@@ -85,6 +85,14 @@ interface LeadDetailSheetProps {
   onUpdateNote?: (noteId: string, note: string) => void;
   onDeleteNote?: (noteId: string) => void;
   onConvert?: (lead: Lead) => void;
+  // SRS 5.5 (LD-A7): turn this lead into a client of the Billing module.
+  // Absent unless the member may manage clients and billing is on for the
+  // organization, so the button never offers what the API would refuse.
+  onConvertToClient?: (lead: Lead) => void;
+  // True while that request is in flight, so the button cannot be pressed
+  // twice: a second client for one lead is refused, which reads as an error
+  // for something the member did not mean to do.
+  convertingToClient?: boolean;
   // Absent when the storage feature is off for the organization: the tab is hidden.
   attachments?: { canUpload: boolean; canDelete: boolean };
 }
@@ -104,6 +112,8 @@ export function LeadDetailSheet({
   onUpdateNote,
   onDeleteNote,
   onConvert,
+  onConvertToClient,
+  convertingToClient = false,
   attachments,
 }: LeadDetailSheetProps) {
   const [activityType, setActivityType] = useState<LeadActivityType>("call");
@@ -279,6 +289,25 @@ export function LeadDetailSheet({
                   <UserCheck className="h-3.5 w-3.5" /> Convert to Contact
                 </Button>
               ))}
+
+            {/* LD-A7. Separate from "Convert to Contact" above: a contact is a
+                person in the CRM, a client is who an invoice is addressed to,
+                and a lead can become both. */}
+            {onConvertToClient && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={convertingToClient}
+                onClick={() => onConvertToClient(lead)}
+              >
+                {convertingToClient ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Building className="h-3.5 w-3.5" />
+                )}
+                {convertingToClient ? "Creating client..." : "Convert to client"}
+              </Button>
+            )}
           </div>
 
           <Tabs defaultValue="activity">

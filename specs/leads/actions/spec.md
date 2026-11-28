@@ -1,10 +1,10 @@
 # Lead actions
 **SRS section:** 5.5 · **Requirement IDs:** LD-A1, LD-A2, LD-A3, LD-A4, LD-A5, LD-A6, LD-A7 · **Priority:** Must 5, Should 2 · **Feature flag:** crm_enabled
 **Project:** crm_main_panel (Tenant Panel UI) · **Other side:** [crm_backend](../../../../crm_backend/specs/leads/actions/spec.md)
-**Overall status in this project:** 🟡 (2 of 7 requirements implemented)
+**Overall status in this project:** 🟡 (3 of 7 requirements implemented)
 
 ## Summary
-Adding, editing, deleting, importing and calling leads. Add, edit and delete work; the duplicate warning and the 30-day restore were built on 2026-11-27. Import, social leads and the Billing conversion do not exist. Used by Sales Executive, Sales Manager, Tenant Admin.
+Adding, editing, deleting, importing and calling leads. Add, edit and delete work; the duplicate warning and the 30-day restore were built on 2026-11-27, and Convert to client on 2026-11-28. Import and social leads do not exist in this panel. Used by Sales Executive, Sales Manager, Tenant Admin.
 
 ## Implementation status
 Source: [OrbitOps SRS](../../../../docs/requirements/orbitops-srs.md). A requirement is fully done only when every project's spec shows ✅ or ➖; see the [coverage matrix](../../../../docs/requirements/coverage-matrix.md).
@@ -17,7 +17,7 @@ Source: [OrbitOps SRS](../../../../docs/requirements/orbitops-srs.md). A require
 | LD-A4 | Bulk actions on selected leads: assign owner, change stage, change status, add/remove tags, export, delete. | Must | 🟡 | `handleBulkStageChange`, `handleBulkAssign`, `handleBulkDelete`, `ExportButton` | Stage, owner, delete and export. A bulk delete now promises the same 30 days as a single one. Still no bulk tags and no bulk "status" separate from the stage. |
 | LD-A5 | Import leads from CSV/Excel with column mapping, duplicate handling (skip, update, create) and an error report. | Must | ❌ | — | No import screen, and no import API to build one against. |
 | LD-A6 | Quick call: phone icon opens the dialler (tel: link, or integrated telephony later); after a call the user logs an outcome. The icon is colour-coded: green = answered / connected, yellow = follow-up pending, red = not answered or missed follow-up, grey = never called. | Must | 🟡 | the Mobile column, `CALL_COLOR` in `app/[orgnization]/leads/page.tsx`, `CALL_DOT` in `components/leads/kanban-card.tsx`, the outcome picker in `components/leads/lead-detail-sheet.tsx` | The `tel:` link, the four colours and logging the outcome are all built: picking "call" in the detail sheet's activity box reveals an outcome dropdown, and that is what sets the lead's last call status. **Not built:** the red "missed follow-up" case — the colour follows the last call's outcome alone, and nothing works out that a follow-up date has passed, because nothing watches follow-up dates yet (see Blocked). Integrated telephony does not exist. |
-| LD-A7 | Convert a lead into a Billing client (pre-fills client details). | Should | ❌ | — | No Billing clients exist. |
+| LD-A7 | Convert a lead into a Billing client (pre-fills client details). | Should | ✅ | the **Convert to client** button in `components/leads/lead-detail-sheet.tsx`, `handleConvertLeadToClient` and `canConvertToClient` in `app/[orgnization]/leads/page.tsx`, `reqToConvertLeadToClient` in `lib/store/slices/billingClientsSlice.ts`, the wording in `lib/clients/types.ts` | Built 2026-11-28 with the Clients screens; see [billing/clients](../../billing/clients/spec.md). The lead detail sheet has **Convert to client** beside Convert to Contact — a contact is a person in the CRM, a client is who an invoice is addressed to, and a lead can become both. It needs `leads.view` + `clients.manage`, which `/auth/me` drops while billing is off, so the button is simply absent then. It sends an empty body (the API pre-fills from the lead), disables itself with a spinner while the request runs so it cannot be pressed twice, then opens the new client. A lead already converted shows what it became and opens that client. **Not type-checked, not linted, not opened in a browser.** |
 
 ## Pending from the backend
 Nothing for LD-A1 and LD-A3: both are built in `crm_backend` (see its [actions spec](../../../../crm_backend/specs/leads/actions/spec.md) → API) and this panel uses every route and code they added.
@@ -25,7 +25,7 @@ Nothing for LD-A1 and LD-A3: both are built in `crm_backend` (see its [actions s
 Still missing from the backend for the rest of 5.5:
 - **LD-A5** — no import route or background job, so there is nothing for an import screen to call.
 - **LD-A4's bulk tags** — the bulk edit takes tags already; the panel has no control for them. That is this project's gap, not the backend's.
-- **LD-A7** — no Billing clients anywhere.
+- **LD-A7** — **nothing is missing, and the panel half is built.** `POST /leads/:id/convert-to-client` (`leads.view` + `clients.manage`, and both `crm_enabled` and `billing_enabled`) pre-fills the client from the lead, so the panel sends an empty body. The Convert to client button, its error wording and the jump to the new client all use it; see [billing/clients](../../billing/clients/spec.md) for the screens it lands on.
 
 ## Blocked on another feature
 - **LD-A2 (social lead forms)** — until it exists nothing fills in a lead's campaign reference, so that field stays read-only.
@@ -81,4 +81,5 @@ What has never been exercised: the duplicate warning's three ways out (open, add
 - Clearing the filters when opening a duplicate match that is not on the loaded page.
 
 ## Change Request History
+- 2026-11-28: LD-A7 built in the panel. Convert to client on the lead detail sheet, with the busy state, the plain-words error handling and the jump to the new client. The Clients screens it lands on are in [billing/clients](../../billing/clients/spec.md). No tests, lint or type-check run, by Raj's instruction. Asked by Raj.
 - 2026-11-27: LD-A1 and LD-A3 built in the panel. The duplicate warning with Open it / Add it anyway and the hidden-match case; the Deleted leads tab with restore deadlines and a Restore button; delete confirmations reworded for the 30-day window; LD-A6's call outcome and coloured call indicator. No tests, lint or type-check run, by Raj's instruction. Asked by Raj.

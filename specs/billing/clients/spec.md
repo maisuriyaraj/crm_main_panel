@@ -1,19 +1,87 @@
 # Clients tab
 **SRS section:** 7.7 · **Requirement IDs:** BI-CL1, BI-CL2, BI-CL3 · **Priority:** Must 2, Should 1 · **Feature flag:** billing_enabled
 **Project:** crm_main_panel (Tenant Panel UI) · **Other side:** [crm_backend](../../../../crm_backend/specs/billing/clients/spec.md)
-**Overall status in this project:** ❌ (0 of 3 requirements implemented)
+**Overall status in this project:** 🟡 (1 of 3 requirements implemented; BI-CL2 and BI-CL3 are built as far as they can be and both wait on the invoice screens)
 
 ## Summary
-Client records and balances. Nothing is built. Used by Accountant, Tenant Admin.
+The clients this organization invoices: a list with search and an active/inactive filter, a form with every field SRS 7.7 names, and a client page showing their details, the CRM lead they came from, and where their invoices, payments and balance will go.
+
+Also the Leads screen's **Convert to client** action (SRS 5.5, LD-A7), which turns a lead into a client and opens it, and the credit-limit warning (BI-CL3), built as a drop-in for the invoice form that does not exist yet.
+
+Not the OrbitOps invoices this organization receives — that is [`/settings/billing`](../../tenant-shell/settings/spec.md) — and not its CRM contacts. **Nothing can be invoiced yet**, which the list says once at the top and the client page says where the invoices would be. Used by Accountant, Tenant Admin; read by Sales Manager and Viewer.
+
+Built 2026-11-28, against the backend built the same day.
 
 ## Implementation status
 Source: [OrbitOps SRS](../../../../docs/requirements/orbitops-srs.md). A requirement is fully done only when every project's spec shows ✅ or ➖; see the [coverage matrix](../../../../docs/requirements/coverage-matrix.md).
 
+**No tests were written or run for this work, by Raj's instruction, and `tsc` and `eslint` were not run either.** Nothing here has been opened in a browser or exercised against a running API. What was done is reading the backend's own spec for every field name, status code and error code, and writing the screens against it.
+
 | Req ID | Requirement | Priority | Status | Evidence | Missing or unclear |
 |---|---|---|---|---|---|
-| BI-CL1 | Client fields: company name, contact person, email, phone, GSTIN/TIN, billing address, shipping address, payment terms (Net 30/60/90), credit limit, tax-exempt flag, notes, status (Active/Inactive). | Must | ❌ | — | No billing page, component, slice or sidebar item. "Invoice" appears only in marketing copy on the landing page. |
-| BI-CL2 | Client detail shows all invoices, payments, outstanding balance and a link to the originating CRM lead. | Must | ❌ | — | No billing page, component, slice or sidebar item. "Invoice" appears only in marketing copy on the landing page. |
-| BI-CL3 | Warn when a new invoice takes the client over its credit limit. | Should | ❌ | — | No billing page, component, slice or sidebar item. "Invoice" appears only in marketing copy on the landing page. |
+| BI-CL1 | Client fields: company name, contact person, email, phone, GSTIN/TIN, billing address, shipping address, payment terms (Net 30/60/90), credit limit, tax-exempt flag, notes, status (Active/Inactive). | Must | ✅ | `app/[orgnization]/settings/billing-clients/page.tsx`, `components/billing/client-form-dialog.tsx`, `components/billing/client-duplicate-dialog.tsx`, `lib/clients/types.ts`, `lib/clients/mappers.ts`, `lib/store/slices/billingClientsSlice.ts`, nav entries in `lib/navigation.ts`, routes in `lib/constants.ts` | Every field is on the form and every one is shown. The list searches company, contact, email and phone in one box, filters active against inactive, pages on the server, and sorts by company name, created or updated. **Deactivate**, not Delete: the dialog says the client stays on invoices already raised. Not type-checked, not linted, not opened in a browser. |
+| BI-CL2 | Client detail shows all invoices, payments, outstanding balance and a link to the originating CRM lead. | Must | 🟡 | `app/[orgnization]/settings/billing-clients/[clientId]/page.tsx` | **The lead link is built:** a "Where this client came from" card names the lead and opens it in the Leads screen; a lead that has since been deleted is named but not linked, because a link to a deleted record reads as broken. **The invoices, payments and balance cannot be built:** no invoice exists anywhere in the product (SRS 7.3), so the API answers them empty with `invoices_available: false`. The page shows a Balance card whose every figure is an em dash with "Nothing can be worked out yet", and an Invoices and payments card carrying the API's own "Invoicing is not available yet" line plus what will appear there. Blocked; see below. |
+| BI-CL3 | Warn when a new invoice takes the client over its credit limit. | Should | 🟡 | `lib/clients/credit-limit.ts` (`wouldExceedCreditLimit`, `creditLimitCheck`, `creditLimitWording`), `components/billing/credit-limit-warning.tsx`, `components/billing/credit-limit-confirm-dialog.tsx`; the warning rendered in the Balance card of `app/[orgnization]/settings/billing-clients/[clientId]/page.tsx`; the limit itself on the client form | **The warning is written and ready; the screen it belongs on is not.** The rule mirrors the server's (`crm_backend/src/services/billing-clients/credit-limit.js`) exactly — null limit means no limit, 0 is a real limit, strictly greater exceeds, minor units throughout. `CreditLimitWarning` renders the warning with its workings; `CreditLimitConfirmDialog` is the "Raise it anyway" step, because the SRS asks for a warning, not a block. **Live today** on the client page, in the one state it can be in: the limit is real, what they owe is not knowable, and it says so. **Never shown over-limit to anyone**, because there is no invoice form to raise an invoice in and no outstanding balance to add it to — the same wall the server's own rule sits behind. Not type-checked, not linted, not opened in a browser. |
+
+## Pending from the backend
+**Nothing.** Every route, field and error code this feature needed exists and is used: the list, the detail, create, edit, the status toggle and `POST /leads/:id/convert-to-client`. See the backend's [clients spec](../../../../crm_backend/specs/billing/clients/spec.md) → API.
+
+## Blocked on another feature
+- **BI-CL2's invoices, payments and balance** and **BI-CL3's warning** both wait on the **invoice CRUD feature** (SRS 7.3, `../create-edit-invoice/spec.md`), which exists in neither project. When it lands:
+  - the client page's Balance card and Invoices and payments card read `invoices`, `payments`, `outstanding_balance` and `totals` from the detail response, which already carries them in their final shape — the mapper (`mapClientDetailFromApi`) maps them today, so only the two cards change;
+  - `invoicesAvailable` flipping to `true` is what swaps the "not available yet" panel for the real table: that branch is already written;
+  - **BI-CL3's warning is already written** and the invoice form only has to use it. Three steps, no new wording to invent: render `<CreditLimitWarning client={client} clientName={…} currency={…} newInvoiceTotalMinor={runningTotal} currentOutstandingMinor={client.credit.outstandingMinor} />` under the totals so it warns while someone types; on save call `wouldExceedCreditLimit(client, total, outstanding)` and, when it is true, open `<CreditLimitConfirmDialog … onConfirm={submit} />` instead of submitting; on an **edit**, pass the difference the edit makes, not the invoice's whole total, or the invoice counts twice. The server re-checks with the same rule, and is the authority.
+  - the client picker on a new invoice needs the client's `credit.outstandingMinor`, which is null today; the warning handles null by saying the limit has not been checked rather than implying the invoice is fine;
+  - the client picker on a new invoice must offer **active clients only** (`?status=active`, which is the list's default).
+- **The column chooser (SH-L3) and saved views (SH-L4) do not work for this list**, and will not until clients join the shared list catalog: they hang off it, and clients are deliberately not in it (no owner, so no record scope). The list has plain sortable headers, the search box and the status filter.
+
+## Decisions (2026-11-28)
+Asked by Raj before the work, or settled while building. Change them only through `/sdd-change`.
+
+- **One route pair, in the Billing area:** `/{org}/settings/billing-clients` and `/{org}/settings/billing-clients/{id}`. Beside `/settings/billing-settings` (how invoices will look) and deliberately not under `/settings/billing`, which is the invoices OrbitOps sends this organization — three different things that would read as one if they shared a path.
+- **A page, not a sheet, for the client detail.** Contacts and Leads open a side sheet, because a member works through a list of them. A client is a record someone opens to check or correct a billing detail, and BI-CL2 will fill the page with invoices and payments, which a sheet could not hold.
+- **`clients.view` gates the screens, `clients.manage` every control.** `/auth/me` drops both keys while `billing_enabled` is off for the organization, so one `can()` check covers the plan, the flag and the role, and the pages fire no request without it — a typed-in URL costs nothing. A reader without `clients.manage` sees "You can look, but not change", as the invoice settings screen does.
+- **The list is not on the shared list contract**, because the API's is not: no record scope, so no `useServerList`, no column chooser, no saved views. It still uses `ServerList` for the table, the pager and the empty state, and maps the API's `pagination` and `meta.empty_state` through `lib/lists/types`, so page sizes and the "1–10 of 46" line are the shared ones rather than a second set.
+- **"Same as billing" is a form control and nothing else.** Ticked, the shipping fields are hidden and the billing address is copied across in the mapper on submit — `mapClientFormToApi` sends `shipping_address: null`, which is what the API reads as "ship where the invoice is addressed". No flag is stored, so nothing can fall out of step with the address it describes.
+- **A duplicate gets its own dialog with one way out: open the client that already exists.** Deliberately unlike the lead duplicate dialog's "Add it anyway" — the API has no override, and two client records for one company would split their invoices and their balance. The dialog names the matched field (email or phone) and the client, and the form stays open behind it so nothing typed is lost.
+- **Error codes are turned into sentences in one place,** `clientErrorMessage` in `lib/clients/types.ts`, so the list, the client page and the Leads screen all say the same thing about the same code. `CLIENT_ALREADY_EXISTS` names the client and tells the reader to open it; `LEAD_ALREADY_CONVERTED` names the client the lead already became; `CLIENT_NAME_REQUIRED` says the lead has no name to use and what to do instead; `CLIENT_NOT_FOUND` and `LEAD_NOT_FOUND` say the record is gone or not theirs to open. Anything else falls back to the API's own message, which is already written for a reader.
+- **A credit limit is typed in major units and sent in minor ones** (`creditLimitToMinor`), and the three cases are shown differently, never flattened: "No limit set" for null, "No credit — pays up front" for 0, and the amount otherwise. The form says which is which, because a 0 typed to mean "no limit" would be the opposite of what the member wanted.
+- **Amounts use the organization's business currency**, which the API sends with the list (`meta.currency`) and with each client, formatted with Indian grouping for INR (SRS NFR-U4).
+- **LD-A7 is a button on the lead detail sheet, beside Convert to Contact,** not instead of it: a contact is a person in the CRM, a client is who an invoice is addressed to, and a lead can become both. It sends an empty body — the API fills the client in from the lead — disables itself while the request is in flight (a second press would be refused as an already-converted lead, which reads as an error for something the member did not do), then opens the new client. Already converted, the toast says so and the existing client is opened anyway, because that is the only useful thing left to do.
+- **The lead link on the client page uses this panel's own deep link** (`/{org}/leads?lead=<id>`), not the API's `source_lead.path`: a lead opens in a sheet over the Leads screen here, and `/leads/<id>` is not a route this panel has.
+- **"Invoicing isn't available yet" is said twice and no more:** once at the top of the list, once where the invoices would be on the client page. Not per row, and not on the form, where it would get in the way of the job the member came to do.
+
+### BI-CL3, the credit-limit warning
+- **The rule is copied from the server, not reinterpreted.** `lib/clients/credit-limit.ts` mirrors `crm_backend/src/services/billing-clients/credit-limit.js` line for line in meaning: a null limit means no limit and never warns, a limit of 0 is a real limit ("pays up front"), the comparison is strictly greater so an invoice landing exactly on the limit is within it, and every amount is whole minor units in the organization's business currency. It exists so the invoice form can warn **while someone is still typing** — a warning that only arrived after the save would not be a warning. **The server stays the authority:** this refuses nothing and allows nothing, it only says what will happen, and the server checks again.
+- **Unknown is not zero.** `currentOutstandingMinor` of `null` means nobody knows what the client owes, which is the case until invoices exist. `creditLimitCheck` then answers `exceeds: null`, and the warning says what the limit is and that it has not been checked. Passing 0 instead would tell someone an invoice is comfortably within a limit nobody has measured.
+- **Warn, never block.** `CreditLimitConfirmDialog` always offers "Raise it anyway". Blocking would stop a tenant invoicing a good customer because somebody set a limit a year ago and forgot it — the server's own reasoning, kept on this side too.
+- **`variant="warning"`, not `destructive`.** Going over a credit limit is a decision the member is allowed to make. Red reads as "this failed", and nothing has failed.
+- **Quiet when the invoice is within the limit.** `showWhenWithin` is off by default: a form that reassures on every keystroke is noise, and BI-CL3 asks for a warning. The confirm dialog turns it on, because there the figures are the whole point.
+- **The workings are shown, not just the sentence:** already owed, this invoice, would owe, and over by / credit left. A warning about money that cannot be checked is a warning people learn to dismiss.
+- **One component for every place the limit is mentioned**, so the inline warning, the confirm dialog and the client page cannot word the same situation three ways. It renders nothing for a client with no limit, so a caller never has to check first.
+
+## Screens and routes
+| Where | What |
+|---|---|
+| Sidebar → Organization → **Clients** | `clients.view`, module `invoices` (which is where the keys live, so a plan or subscription message is the right one). |
+| Top bar → Settings → **Clients** | Same permission. |
+| Top bar → Create (+) → **New client** | `clients.manage`; links with `?new=1`, which the list page opens its form from. |
+| `/{org}/settings/billing-clients` | The list: search box, Active/Inactive filter, Clear filters, sortable Client / Credit limit headers, pager, New client. Each row has Edit and Deactivate/Activate; the row itself opens the client. |
+| `/{org}/settings/billing-clients/{id}` | The client: status badge, Edit, Deactivate/Activate, a Details card (contact, tax id, terms, credit limit, tax treatment, both addresses, notes), "Where this client came from", Balance, and Invoices and payments. |
+| Leads → lead detail sheet | **Convert to client**, with a spinner while it runs. |
 
 ## Out-of-SRS behaviour
-None found.
+- The two routes themselves, the nav entry, the Settings-menu entry and the Create (+) entry: the SRS names a Clients tab inside Billing, not a page under Settings. There is no Billing module screen to hold a tab yet.
+- Showing "No credit — pays up front" for a limit of 0 and "No limit set" for none, as three distinct readings of one column.
+- The duplicate dialog, and its single "Open that client" action: the SRS asks for client fields, not for a duplicate rule.
+- Disabling Convert to client while it runs, and opening the existing client when a lead was already converted.
+- Naming but not linking a deleted source lead.
+- The "Set up your invoice details" link from the empty Invoices card to the invoice settings screen.
+- The Balance card existing at all while every figure in it is unknown: it is there so the shape of the page does not change under the member when invoicing arrives.
+- `creditLimitWording`, `creditLimitCheck`'s `availableMinor` / `overByMinor` / `payUpFront`, and the workings shown under the warning: the SRS asks for a warning, not for a breakdown of it.
+- Treating a limit of 0 as "pays up front" and wording it differently from going over a real limit.
+- Showing the warning on the client page at all. BI-CL3 is about an invoice being raised; this is the only place it can be seen today, and it is what keeps the component from being code nobody has ever rendered.
+
+## Change Request History
+- 2026-11-28: BI-CL3 built as far as this panel can take it. `lib/clients/credit-limit.ts` mirroring the server's rule, `CreditLimitWarning` with its workings, and `CreditLimitConfirmDialog` for the "Raise it anyway" step. The warning is rendered on the client page in its not-yet-checkable state; its over-limit state has never been shown, because there is no invoice form. The invoice feature's three-step wiring is written out under Blocked on another feature. No tests, lint or type-check run, by Raj's instruction. Asked by Raj.
+- 2026-11-28: Built BI-CL1 in full, BI-CL2's lead link and placeholders, and LD-A7's Convert to client. Clients list and client page under `/settings/billing-clients`, the client form with the "same as billing" copy, the duplicate dialog, the error-code wording, the `billingClients` slice, and the nav, Settings-menu and Create (+) entries. No tests written or run, and `tsc` and `eslint` were not run, by Raj's instruction. Asked by Raj.

@@ -1,8 +1,10 @@
 import {
   BarChart3,
+  Building,
   CreditCard,
   LayoutDashboard,
   Megaphone,
+  Package,
   ReceiptText,
   UserPlus,
   Users,
@@ -47,6 +49,12 @@ export const settingsLinks: SettingsLink[] = [
   // `/auth/me` drops the invoices keys while billing_enabled is off, so this one
   // permission gates the flag and the role together.
   { label: "Invoice settings", href: pageRoutes.settingsBillingSettings, permission: "invoices.view" },
+  // The clients the organization invoices. Its own key, held by the same roles
+  // as the invoice settings and dropped with them while billing is off.
+  { label: "Clients", href: pageRoutes.billingClients, permission: "clients.view" },
+  // The price list an invoice line will be filled in from. Same billing flag and
+  // the same roles, so it comes and goes with the invoice settings.
+  { label: "Products & services", href: pageRoutes.billingProducts, permission: "products.view" },
   { label: "Plan & usage", href: pageRoutes.settingsUsage, permission: null },
   { label: "Security", href: pageRoutes.settingsSecurity, permission: null },
   { label: "Notifications", href: pageRoutes.settingsNotifications, permission: null },
@@ -82,6 +90,12 @@ export const navGroups: NavGroupConfig[] = [
       // How the organization invoices its own clients. Its own invoice screens do
       // not exist yet, so only the settings page is linked.
       { label: "Invoice settings", icon: ReceiptText, href: pageRoutes.settingsBillingSettings, permission: "invoices.view", module: "invoices" },
+      // Whom the organization invoices. The clients.* keys live in the invoices
+      // catalog module, so that is what explains it being unavailable.
+      { label: "Clients", icon: Building, href: pageRoutes.billingClients, permission: "clients.view", module: "invoices" },
+      // What the organization sells. The products.* keys live in the invoices
+      // catalog module, so that is what explains it being unavailable.
+      { label: "Products & services", icon: Package, href: pageRoutes.billingProducts, permission: "products.view", module: "invoices" },
     ],
   },
 ];
@@ -102,6 +116,8 @@ export type CreateAction = {
 export const createActions: CreateAction[] = [
   { label: "New lead", icon: UserPlus, href: pageRoutes.leads, permission: "leads.create", module: "leads", param: "new" },
   { label: "New contact", icon: Users, href: pageRoutes.contacts, permission: "contacts.create", module: "contacts", param: "new" },
+  { label: "New client", icon: Building, href: pageRoutes.billingClients, permission: "clients.manage", module: "invoices", param: "new" },
+  { label: "New product or service", icon: Package, href: pageRoutes.billingProducts, permission: "products.manage", module: "invoices", param: "new" },
 ];
 
 export type ModuleOff = { module: string; reason: string } | null;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Phone, Plus, Settings2 } from "lucide-react";
 
 import { notify } from "@/lib/commonFunctions";
@@ -34,6 +34,8 @@ import {
 import { reqToGetMemberOptions } from "@/lib/store/slices/orgUsersSlice";
 import { isFeatureOn, reqToGetFeatures } from "@/lib/store/slices/featuresSlice";
 import { reqToConvertLead } from "@/lib/store/slices/contactsSlice";
+import { reqToConvertLeadToClient } from "@/lib/store/slices/billingClientsSlice";
+import { CLIENT_ERROR, clientErrorCodeOf, clientErrorMessage, clientErrorTargetOf } from "@/lib/clients/types";
 import { mapDuplicateResultFromApi, mapLeadFromApi, mapLeadPayloadToApi } from "@/lib/leads/mappers";
 import {
   CALL_STATUS_LABEL,
@@ -93,7 +95,7 @@ import { ExportButton } from "@/components/shared/export-button";
 import { ServerList, type ServerListColumn } from "@/components/shared/server-list";
 import { SavedViewsBar } from "@/components/shared/saved-views-bar";
 import { Truncated } from "@/components/shared/field-help";
-import { apiRoutes } from "@/lib/constants";
+import { apiRoutes, billingClientRoute, buildOrgRoute } from "@/lib/constants";
 import { HeldLeadsNotice } from "@/components/usage/held-leads-notice";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUsage } from "@/hooks/useUsage";
@@ -165,6 +167,8 @@ function LeadsWorkspace() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const params = useParams<{ orgnization: string }>();
+  const orgSlug = params?.orgnization ?? "";
   const view = (searchParams.get("view") as ViewMode) || "list";
 
   const { can, canAll } = useAuth();
@@ -174,6 +178,10 @@ function LeadsWorkspace() {
   const canBulk = can("leads.bulk");
   const canExport = can("leads.export");
   const canConvert = canAll(["leads.update", "contacts.create"]);
+  // LD-A7. Reading the lead is enough on the lead side; creating the client is
+  // what needs a permission. /auth/me drops clients.manage while billing is off
+  // for the organization, so this one check covers the plan and the role.
+  const canConvertToClient = canAll(["leads.view", "clients.manage"]);
   const canLookupMembers = can("members.lookup");
   const canManagePipeline = can("leads.pipeline.manage");
   // At the plan's lead limit the API refuses every new lead, so say so up front.
@@ -223,6 +231,9 @@ function LeadsWorkspace() {
   const [sourceFilter, setSourceFilter] = useState(ALL);
 
   const [detailLeadId, setDetailLeadId] = useState<string | null>(null);
+  // The lead whose client is being created, so the button can show it is busy
+  // and cannot be pressed twice.
+  const [convertingClientLeadId, setConvertingClientLeadId] = useState<string | null>(null);
   const [detailFullLead, setDetailFullLead] = useState<Lead | null>(null);
   const [editLead, setEditLead] = useState<Lead | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -796,6 +807,38 @@ function LeadsWorkspace() {
             error?.response?.data?.message ?? "Couldn't convert this lead. Please try again.",
             { type: "error" },
           ),
+      }),
+    );
+  };
+
+  // LD-A7: the lead becomes a client of the Billing module. The API fills the
+  // client in from the lead, so nothing is sent. The lead stays in the pipeline
+  // with a note on its timeline, so the list is refreshed rather than the row
+  // removed — the same as converting to a contact.
+  const handleConvertLeadToClient = (lead: Lead) => {
+    setConvertingClientLeadId(lead.id);
+    dispatch(
+      reqToConvertLeadToClient({
+        data: { leadId: lead.id },
+        onSuccess: (client: any) => {
+          setConvertingClientLeadId(null);
+          setDetailLeadId(null);
+          refreshLeads();
+          notify(`${leadDisplayName(lead)} is now a client. Opening it...`, { type: "success" });
+          router.push(buildOrgRoute(orgSlug, billingClientRoute(String(client?.id ?? ""))));
+        },
+        onFailure: (error: any) => {
+          setConvertingClientLeadId(null);
+          // Already a client: the only useful thing to do is open the one that
+          // exists, so the message is followed by going there.
+          if (clientErrorCodeOf(error) === CLIENT_ERROR.leadAlreadyConverted) {
+            const existing = clientErrorTargetOf(error);
+            notify(clientErrorMessage(error, "This lead is already a client."), { type: "error" });
+            if (existing) router.push(buildOrgRoute(orgSlug, billingClientRoute(existing.id)));
+            return;
+          }
+          notify(clientErrorMessage(error, "Couldn't turn this lead into a client."), { type: "error" });
+        },
       }),
     );
   };
@@ -1433,6 +1476,8 @@ function LeadsWorkspace() {
         onUpdateNote={canUpdate ? handleUpdateNote : undefined}
         onDeleteNote={canUpdate ? handleDeleteNote : undefined}
         onConvert={canConvert ? handleConvertLead : undefined}
+        onConvertToClient={canConvertToClient ? handleConvertLeadToClient : undefined}
+        convertingToClient={convertingClientLeadId === detailLeadId && convertingClientLeadId !== null}
         attachments={storageOn ? { canUpload: canUpdate, canDelete: canUpdate } : undefined}
       />
 
